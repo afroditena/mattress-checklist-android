@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>매트리스 점검 체크리스트</title>
+<title>매트리스 영업 체크리스트</title>
 <style>
   :root {
     --primary: #2f6f4f;
@@ -23,23 +23,51 @@
   header {
     background: var(--primary);
     color: #fff;
-    padding: 16px 16px 14px;
+    padding: 16px 16px 0;
     text-align: center;
   }
   header h1 { margin: 0; font-size: 18px; }
-  header p { margin: 4px 0 0; font-size: 12px; opacity: 0.85; }
+  header p { margin: 4px 0 14px; font-size: 12px; opacity: 0.85; }
+
+  .tabs {
+    display: flex;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 12px 0;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: rgba(255,255,255,0.75);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .tab-btn.active {
+    color: #fff;
+    border-bottom-color: #fff;
+  }
 
   main { max-width: 600px; margin: 0 auto; padding: 12px 12px 96px; }
 
-  .info-card, .section, .summary-bar { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
 
-  .info-card { padding: 14px; margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
-  .info-field { flex: 1 1 160px; }
-  .info-field label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
-  .info-field input {
+  .card, .section, .summary-bar { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  .card { padding: 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 13px; margin: 0 0 10px; color: var(--primary-dark); }
+  .field-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .field-row:last-child { margin-bottom: 0; }
+  .field { flex: 1 1 160px; }
+  .field label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+  .field input, .field select, .field textarea {
     width: 100%; padding: 8px 10px; font-size: 14px;
     border: 1px solid var(--border); border-radius: 6px; background: #fff;
+    font-family: inherit;
   }
+  .field textarea { resize: vertical; min-height: 56px; }
 
   .summary-bar {
     position: sticky; top: 0; z-index: 5;
@@ -64,7 +92,7 @@
   .toggle { display: flex; flex-shrink: 0; }
   .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
   .toggle label {
-    display: inline-block; min-width: 44px; text-align: center;
+    display: inline-block; min-width: 56px; text-align: center;
     padding: 6px 10px; margin-left: 6px; font-size: 12.5px;
     border: 1px solid var(--border); border-radius: 999px;
     color: #666; cursor: pointer; user-select: none;
@@ -111,7 +139,7 @@
   .modal-actions button.danger { background: var(--no); border-color: var(--no); color: #fff; }
 
   @media print {
-    .actions, .toast, .modal-overlay { display: none; }
+    .tabs, .actions, .toast, .modal-overlay { display: none; }
     .summary-bar { position: static; }
     body { background: #fff; }
   }
@@ -120,29 +148,169 @@
 <body>
 
 <header>
-  <h1>매트리스 점검 체크리스트</h1>
+  <h1>매트리스 영업 체크리스트</h1>
   <p>오프라인 앱 · 입력 내용은 이 기기에만 저장됩니다</p>
+  <div class="tabs">
+    <button class="tab-btn active" id="tabBtnConsult" data-tab="consult">상담 체크리스트</button>
+    <button class="tab-btn" id="tabBtnReferral" data-tab="referral">지인 소개</button>
+  </div>
 </header>
 
 <main>
-  <div class="info-card">
-    <div class="info-field">
-      <label for="customerName">고객명</label>
-      <input type="text" id="customerName" placeholder="고객 이름을 입력하세요">
+  <!-- ===== 상담 체크리스트 ===== -->
+  <section class="tab-panel active" id="panelConsult">
+    <div class="card">
+      <h2>고객 정보</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="c_customerName">고객명</label>
+          <input type="text" id="c_customerName" placeholder="고객 이름">
+        </div>
+        <div class="field">
+          <label for="c_customerPhone">연락처</label>
+          <input type="tel" id="c_customerPhone" placeholder="010-0000-0000">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="c_consultDate">상담일</label>
+          <input type="date" id="c_consultDate">
+        </div>
+        <div class="field">
+          <label for="c_consultChannel">상담 경로</label>
+          <select id="c_consultChannel">
+            <option value="">선택 안 함</option>
+            <option value="매장 방문">매장 방문</option>
+            <option value="전화 상담">전화 상담</option>
+            <option value="방문 상담">방문 상담</option>
+            <option value="지인 소개">지인 소개</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+      </div>
     </div>
-    <div class="info-field">
-      <label for="inspectionDate">점검일</label>
-      <input type="date" id="inspectionDate">
+
+    <div class="summary-bar">
+      <div class="yes">확인 <span class="count" id="c_countYes">0</span></div>
+      <div class="no">미확인 <span class="count" id="c_countNo">0</span></div>
+      <div class="pending">남음 <span class="count" id="c_countPending">0</span></div>
     </div>
-  </div>
 
-  <div class="summary-bar">
-    <div class="yes">예 <span class="count" id="countYes">0</span></div>
-    <div class="no">아니오 <span class="count" id="countNo">0</span></div>
-    <div class="pending">미응답 <span class="count" id="countPending">0</span></div>
-  </div>
+    <div id="c_checklist"></div>
 
-  <div id="checklist"></div>
+    <div class="card">
+      <h2>파악한 니즈 메모</h2>
+      <div class="field">
+        <textarea id="c_needsMemo" placeholder="선호 경도, 예산, 특이사항 등"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>상담 결과</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="c_resultStatus">진행 상태</label>
+          <select id="c_resultStatus">
+            <option value="">선택 안 함</option>
+            <option value="계약 완료">계약 완료</option>
+            <option value="검토 중">검토 중</option>
+            <option value="보류">보류</option>
+            <option value="거절">거절</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="c_followUpDate">후속 연락 예정일</label>
+          <input type="date" id="c_followUpDate">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="c_resultMemo">메모</label>
+          <textarea id="c_resultMemo" placeholder="상담 특이사항"></textarea>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 지인 소개 ===== -->
+  <section class="tab-panel" id="panelReferral">
+    <div class="card">
+      <h2>소개자 정보</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="r_referrerName">소개자 이름</label>
+          <input type="text" id="r_referrerName" placeholder="소개해준 분 이름">
+        </div>
+        <div class="field">
+          <label for="r_referrerPhone">소개자 연락처</label>
+          <input type="tel" id="r_referrerPhone" placeholder="010-0000-0000">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="r_referrerRelation">관계</label>
+          <select id="r_referrerRelation">
+            <option value="">선택 안 함</option>
+            <option value="기존 고객">기존 고객</option>
+            <option value="지인">지인</option>
+            <option value="가족">가족</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>피소개인 정보</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="r_refereeName">피소개인 이름</label>
+          <input type="text" id="r_refereeName" placeholder="새로 소개받은 분 이름">
+        </div>
+        <div class="field">
+          <label for="r_refereePhone">피소개인 연락처</label>
+          <input type="tel" id="r_refereePhone" placeholder="010-0000-0000">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="r_referralContext">소개 경위</label>
+          <textarea id="r_referralContext" placeholder="어떻게 소개가 이어졌는지"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-bar">
+      <div class="yes">완료 <span class="count" id="r_countYes">0</span></div>
+      <div class="no">미완료 <span class="count" id="r_countNo">0</span></div>
+      <div class="pending">남음 <span class="count" id="r_countPending">0</span></div>
+    </div>
+
+    <div id="r_checklist"></div>
+
+    <div class="card">
+      <h2>진행 현황</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="r_referralStatus">진행 상태</label>
+          <select id="r_referralStatus">
+            <option value="">선택 안 함</option>
+            <option value="연락 대기">연락 대기</option>
+            <option value="상담 예정">상담 예정</option>
+            <option value="상담 완료">상담 완료</option>
+            <option value="계약 완료">계약 완료</option>
+            <option value="불발">불발</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="r_referralMemo">메모</label>
+          <textarea id="r_referralMemo" placeholder="후속 조치, 리워드 지급 내역 등"></textarea>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <div class="actions">
@@ -155,7 +323,7 @@
 
 <div class="modal-overlay" id="resetOverlay">
   <div class="modal-box">
-    <p>체크리스트를 초기화하시겠습니까?<br>입력한 내용이 모두 지워집니다.</p>
+    <p id="resetMessage">현재 탭의 내용을 초기화하시겠습니까?<br>입력한 내용이 모두 지워집니다.</p>
     <div class="modal-actions">
       <button id="resetCancel">취소</button>
       <button id="resetConfirm" class="danger">초기화</button>
@@ -167,37 +335,102 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "mattressChecklistState";
+  var STORAGE_PREFIX = "mattressSales.";
 
-  var CHECKLIST = [
-    { section: "외관 상태", items: [
-      { id: "surface_clean", label: "매트리스 표면에 오염, 얼룩, 훼손이 없다" },
-      { id: "no_odor", label: "화학 냄새 등 이상한 냄새가 없다" },
-      { id: "cover_intact", label: "커버 원단이 찢어지거나 풀린 부분이 없다" },
-      { id: "seam_stitch", label: "이음새 박음질 상태가 양호하다" }
-    ]},
-    { section: "구조 및 기능", items: [
-      { id: "no_sag", label: "눌림이나 꺼짐 없이 표면이 고르다" },
-      { id: "spring_noise", label: "스프링/구조체에서 이상 소음이 없다" },
-      { id: "size_match", label: "사이즈가 주문 사양과 일치한다" },
-      { id: "frame_fixed", label: "다리/프레임(해당 시) 고정 상태가 양호하다" }
-    ]},
-    { section: "위생 및 부속품", items: [
-      { id: "zipper_ok", label: "지퍼(있는 경우) 개폐가 원활하다" },
-      { id: "tag_label", label: "라벨/택 부착 상태가 양호하다" },
-      { id: "accessories", label: "구성품(다리, 설명서 등)이 모두 포함되어 있다" },
-      { id: "packaging", label: "포장 상태가 양호하며 파손 흔적이 없다" }
-    ]}
-  ];
+  // ---- 탭 정의: 각 탭은 체크리스트 항목 + 일반 입력 필드를 갖는다 ----
+  var TABS = {
+    consult: {
+      panelId: "panelConsult",
+      checklistElId: "c_checklist",
+      countYesId: "c_countYes",
+      countNoId: "c_countNo",
+      countPendingId: "c_countPending",
+      title: "상담 체크리스트",
+      sections: [
+        { section: "고객 니즈 파악", items: [
+          { id: "n_history", label: "현재 사용 매트리스 상태·불편한 점 확인" },
+          { id: "n_firmness", label: "선호 경도(푹신함~단단함) 확인" },
+          { id: "n_posture", label: "평소 수면 자세 확인" },
+          { id: "n_pain", label: "허리·어깨 등 통증 여부 확인" },
+          { id: "n_occupants", label: "사용 인원(1인/2인) 확인" },
+          { id: "n_budget", label: "예산 범위 확인" }
+        ]},
+        { section: "상담 진행", items: [
+          { id: "p_recommend", label: "추천 제품 및 특장점 설명함" },
+          { id: "p_compare", label: "타사 제품 대비 차별점 설명함" },
+          { id: "p_trial", label: "매장/샘플 체험(시착) 안내함" },
+          { id: "p_price", label: "가격 및 할인 조건 안내함" },
+          { id: "p_delivery", label: "배송·설치 일정 안내함" },
+          { id: "p_warranty", label: "A/S 및 품질보증 정책 안내함" },
+          { id: "p_referral", label: "지인 소개 혜택 안내함" }
+        ]}
+      ],
+      fields: [
+        "c_customerName", "c_customerPhone", "c_consultDate", "c_consultChannel",
+        "c_needsMemo", "c_resultStatus", "c_followUpDate", "c_resultMemo"
+      ],
+      buildResultText: function (values, answers, checklistText) {
+        var lines = [];
+        lines.push("매트리스 상담 체크리스트");
+        lines.push("고객명: " + (values.c_customerName || "-"));
+        lines.push("연락처: " + (values.c_customerPhone || "-"));
+        lines.push("상담일: " + (values.c_consultDate || "-"));
+        lines.push("상담 경로: " + (values.c_consultChannel || "-"));
+        lines.push("");
+        lines.push(checklistText);
+        lines.push("파악한 니즈: " + (values.c_needsMemo || "-"));
+        lines.push("");
+        lines.push("진행 상태: " + (values.c_resultStatus || "-"));
+        lines.push("후속 연락 예정일: " + (values.c_followUpDate || "-"));
+        lines.push("메모: " + (values.c_resultMemo || "-"));
+        return lines.join("\n");
+      }
+    },
+    referral: {
+      panelId: "panelReferral",
+      checklistElId: "r_checklist",
+      countYesId: "r_countYes",
+      countNoId: "r_countNo",
+      countPendingId: "r_countPending",
+      title: "지인 소개",
+      sections: [
+        { section: "소개 후속 조치", items: [
+          { id: "r_thanks", label: "소개자에게 감사 인사 전달함" },
+          { id: "r_reward", label: "소개 혜택/리워드 안내함" },
+          { id: "r_contact", label: "피소개인에게 첫 연락함" },
+          { id: "r_schedule", label: "상담 일정 협의함" }
+        ]}
+      ],
+      fields: [
+        "r_referrerName", "r_referrerPhone", "r_referrerRelation",
+        "r_refereeName", "r_refereePhone", "r_referralContext",
+        "r_referralStatus", "r_referralMemo"
+      ],
+      buildResultText: function (values, answers, checklistText) {
+        var lines = [];
+        lines.push("지인 소개 기록");
+        lines.push("소개자: " + (values.r_referrerName || "-") + " (" + (values.r_referrerRelation || "-") + ", " + (values.r_referrerPhone || "-") + ")");
+        lines.push("피소개인: " + (values.r_refereeName || "-") + " (" + (values.r_refereePhone || "-") + ")");
+        lines.push("소개 경위: " + (values.r_referralContext || "-"));
+        lines.push("");
+        lines.push(checklistText);
+        lines.push("진행 상태: " + (values.r_referralStatus || "-"));
+        lines.push("메모: " + (values.r_referralMemo || "-"));
+        return lines.join("\n");
+      }
+    }
+  };
 
-  var checklistEl = document.getElementById("checklist");
-  var customerNameEl = document.getElementById("customerName");
-  var inspectionDateEl = document.getElementById("inspectionDate");
+  var currentTab = "consult";
   var toastEl = document.getElementById("toast");
+  var resetOverlay = document.getElementById("resetOverlay");
+  var resetMessage = document.getElementById("resetMessage");
 
-  function render() {
+  // ---- 체크리스트 렌더링 ----
+  function renderChecklist(tabKey) {
+    var tab = TABS[tabKey];
     var html = "";
-    CHECKLIST.forEach(function (section) {
+    tab.sections.forEach(function (section) {
       html += '<div class="section"><h2>' + section.section + "</h2>";
       section.items.forEach(function (item) {
         html +=
@@ -205,26 +438,26 @@
             '<span class="item-label">' + item.label + "</span>" +
             '<div class="toggle">' +
               '<input type="radio" class="opt-yes" name="' + item.id + '" id="' + item.id + '_yes" value="yes">' +
-              '<label for="' + item.id + '_yes">예</label>' +
+              '<label for="' + item.id + '_yes">완료</label>' +
               '<input type="radio" class="opt-no" name="' + item.id + '" id="' + item.id + '_no" value="no">' +
-              '<label for="' + item.id + '_no">아니오</label>' +
+              '<label for="' + item.id + '_no">미완료</label>' +
             "</div>" +
           "</div>";
       });
       html += "</div>";
     });
-    checklistEl.innerHTML = html;
+    document.getElementById(tab.checklistElId).innerHTML = html;
   }
 
-  function totalItemCount() {
+  function totalItemCount(tabKey) {
     var total = 0;
-    CHECKLIST.forEach(function (section) { total += section.items.length; });
+    TABS[tabKey].sections.forEach(function (section) { total += section.items.length; });
     return total;
   }
 
-  function getAnswers() {
+  function getAnswers(tabKey) {
     var answers = {};
-    CHECKLIST.forEach(function (section) {
+    TABS[tabKey].sections.forEach(function (section) {
       section.items.forEach(function (item) {
         var checked = document.querySelector('input[name="' + item.id + '"]:checked');
         if (checked) answers[item.id] = checked.value;
@@ -233,36 +466,45 @@
     return answers;
   }
 
-  function updateSummary() {
-    var answers = getAnswers();
+  function getFieldValues(tabKey) {
+    var values = {};
+    TABS[tabKey].fields.forEach(function (fieldId) {
+      var el = document.getElementById(fieldId);
+      values[fieldId] = el ? el.value : "";
+    });
+    return values;
+  }
+
+  function updateSummary(tabKey) {
+    var tab = TABS[tabKey];
+    var answers = getAnswers(tabKey);
     var yes = 0, no = 0;
     Object.keys(answers).forEach(function (id) {
       if (answers[id] === "yes") yes++;
       else if (answers[id] === "no") no++;
     });
-    var pending = totalItemCount() - yes - no;
-    document.getElementById("countYes").textContent = yes;
-    document.getElementById("countNo").textContent = no;
-    document.getElementById("countPending").textContent = pending;
+    var pending = totalItemCount(tabKey) - yes - no;
+    document.getElementById(tab.countYesId).textContent = yes;
+    document.getElementById(tab.countNoId).textContent = no;
+    document.getElementById(tab.countPendingId).textContent = pending;
   }
 
-  function save() {
+  function save(tabKey) {
     var state = {
-      customerName: customerNameEl.value,
-      inspectionDate: inspectionDateEl.value,
-      answers: getAnswers()
+      values: getFieldValues(tabKey),
+      answers: getAnswers(tabKey)
     };
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(STORAGE_PREFIX + tabKey, JSON.stringify(state));
     } catch (e) {
       /* storage unavailable - state simply won't persist across launches */
     }
   }
 
-  function load() {
+  function load(tabKey) {
     var raw;
     try {
-      raw = localStorage.getItem(STORAGE_KEY);
+      raw = localStorage.getItem(STORAGE_PREFIX + tabKey);
     } catch (e) {
       raw = null;
     }
@@ -275,8 +517,11 @@
       return;
     }
 
-    customerNameEl.value = state.customerName || "";
-    inspectionDateEl.value = state.inspectionDate || "";
+    var values = state.values || {};
+    TABS[tabKey].fields.forEach(function (fieldId) {
+      var el = document.getElementById(fieldId);
+      if (el && values[fieldId] !== undefined) el.value = values[fieldId];
+    });
 
     var answers = state.answers || {};
     Object.keys(answers).forEach(function (id) {
@@ -285,9 +530,9 @@
     });
   }
 
-  function onChange() {
-    updateSummary();
-    save();
+  function onChange(tabKey) {
+    updateSummary(tabKey);
+    save(tabKey);
   }
 
   function showToast(message) {
@@ -296,34 +541,30 @@
     setTimeout(function () { toastEl.classList.remove("show"); }, 1600);
   }
 
-  function buildResultText() {
+  function buildChecklistText(tabKey) {
+    var tab = TABS[tabKey];
+    var answers = getAnswers(tabKey);
     var lines = [];
-    lines.push("매트리스 점검 체크리스트");
-    lines.push("고객명: " + (customerNameEl.value || "-"));
-    lines.push("점검일: " + (inspectionDateEl.value || "-"));
-    lines.push("");
-
-    var answers = getAnswers();
-    var yes = 0, no = 0;
-    CHECKLIST.forEach(function (section) {
+    var done = 0, notDone = 0;
+    tab.sections.forEach(function (section) {
       lines.push("[" + section.section + "]");
       section.items.forEach(function (item) {
         var value = answers[item.id];
-        var label = value === "yes" ? "예" : value === "no" ? "아니오" : "미응답";
-        if (value === "yes") yes++;
-        else if (value === "no") no++;
+        var label = value === "yes" ? "완료" : value === "no" ? "미완료" : "미확인";
+        if (value === "yes") done++;
+        else if (value === "no") notDone++;
         lines.push("- " + item.label + ": " + label);
       });
       lines.push("");
     });
-
-    var pending = totalItemCount() - yes - no;
-    lines.push("집계: 예 " + yes + "건 / 아니오 " + no + "건 / 미응답 " + pending + "건");
+    var pending = totalItemCount(tabKey) - done - notDone;
+    lines.push("체크리스트 집계: 완료 " + done + "건 / 미완료 " + notDone + "건 / 남음 " + pending + "건");
     return lines.join("\n");
   }
 
   function copyResult() {
-    var text = buildResultText();
+    var tab = TABS[currentTab];
+    var text = tab.buildResultText(getFieldValues(currentTab), getAnswers(currentTab), buildChecklistText(currentTab));
 
     if (window.AndroidBridge && window.AndroidBridge.copyText) {
       window.AndroidBridge.copyText(text);
@@ -365,9 +606,8 @@
     }
   }
 
-  var resetOverlay = document.getElementById("resetOverlay");
-
-  function resetAll() {
+  function resetCurrentTab() {
+    resetMessage.innerHTML = TABS[currentTab].title + " 탭의 내용을 초기화하시겠습니까?<br>입력한 내용이 모두 지워집니다.";
     resetOverlay.classList.add("show");
   }
 
@@ -376,31 +616,53 @@
   }
 
   function performReset() {
-    customerNameEl.value = "";
-    inspectionDateEl.value = "";
-    var checked = document.querySelectorAll('#checklist input:checked');
+    var tab = TABS[currentTab];
+
+    tab.fields.forEach(function (fieldId) {
+      var el = document.getElementById(fieldId);
+      if (el) el.value = "";
+    });
+    var panel = document.getElementById(tab.panelId);
+    var checked = panel.querySelectorAll('input:checked');
     checked.forEach(function (input) { input.checked = false; });
 
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_PREFIX + currentTab);
     } catch (e) { /* ignore */ }
 
-    updateSummary();
+    updateSummary(currentTab);
     closeResetModal();
     showToast("초기화되었습니다");
   }
 
-  render();
-  load();
-  updateSummary();
+  function switchTab(tabKey) {
+    currentTab = tabKey;
+    Object.keys(TABS).forEach(function (key) {
+      var isActive = key === tabKey;
+      document.getElementById(TABS[key].panelId).classList.toggle("active", isActive);
+      document.getElementById(key === "consult" ? "tabBtnConsult" : "tabBtnReferral").classList.toggle("active", isActive);
+    });
+  }
 
-  checklistEl.addEventListener("change", onChange);
-  customerNameEl.addEventListener("input", onChange);
-  inspectionDateEl.addEventListener("change", onChange);
+  // ---- 초기화 ----
+  Object.keys(TABS).forEach(function (tabKey) {
+    renderChecklist(tabKey);
+    load(tabKey);
+    updateSummary(tabKey);
+
+    document.getElementById(TABS[tabKey].checklistElId).addEventListener("change", function () { onChange(tabKey); });
+    TABS[tabKey].fields.forEach(function (fieldId) {
+      var el = document.getElementById(fieldId);
+      if (el) el.addEventListener(el.tagName === "SELECT" ? "change" : "input", function () { onChange(tabKey); });
+    });
+  });
+
+  document.getElementById("tabBtnConsult").addEventListener("click", function () { switchTab("consult"); });
+  document.getElementById("tabBtnReferral").addEventListener("click", function () { switchTab("referral"); });
 
   document.getElementById("btnCopy").addEventListener("click", copyResult);
   document.getElementById("btnPrint").addEventListener("click", printResult);
-  document.getElementById("btnReset").addEventListener("click", resetAll);
+  document.getElementById("btnReset").addEventListener("click", resetCurrentTab);
   document.getElementById("resetCancel").addEventListener("click", closeResetModal);
   document.getElementById("resetConfirm").addEventListener("click", performReset);
 })();
