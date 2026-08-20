@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>매트리스 점검 체크리스트</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="app-header">
+  <h1>매트리스 점검 체크리스트</h1>
+  <nav class="tabs">
+    <button type="button" class="tab-btn active" data-tab="checklist">점검 체크리스트</button>
+    <button type="button" class="tab-btn" data-tab="report">일일 보고</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ================= 점검 체크리스트 탭 ================= -->
+  <section id="tab-checklist" class="tab-panel active">
+    <form id="checklistForm" autocomplete="off">
+      <div class="field-row">
+        <label class="field">
+          <span>고객명 / 현장명</span>
+          <input type="text" id="customerName" placeholder="예: OO가구 OO점" required />
+        </label>
+        <label class="field">
+          <span>점검자</span>
+          <input type="text" id="inspectorName" placeholder="예: 홍길동" required />
+        </label>
+        <label class="field">
+          <span>점검일</span>
+          <input type="date" id="inspectionDate" required />
+        </label>
+      </div>
+
+      <h2 class="section-title">점검 항목</h2>
+      <div id="checklistItems" class="check-list"></div>
+
+      <div id="tally" class="tally">예: 0건 · 아니오: 0건 · 미응답: 0건</div>
+
+      <label class="field">
+        <span>비고</span>
+        <textarea id="notes" rows="3" placeholder="특이사항을 입력하세요"></textarea>
+      </label>
+
+      <div class="button-row">
+        <button type="button" id="saveBtn" class="btn btn-primary">저장</button>
+        <button type="button" id="copyChecklistBtn" class="btn">복사</button>
+        <button type="button" id="printChecklistBtn" class="btn">인쇄</button>
+        <button type="button" id="resetChecklistBtn" class="btn btn-danger">초기화</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ================= 일일 보고 탭 (본부장 보고용) ================= -->
+  <section id="tab-report" class="tab-panel">
+    <div class="field-row">
+      <label class="field">
+        <span>보고 대상일</span>
+        <input type="date" id="reportDate" />
+      </label>
+    </div>
+
+    <div id="reportSummary" class="summary-cards"></div>
+
+    <h2 class="section-title">항목별 이상 발견 현황</h2>
+    <div id="reportItemBreakdown" class="item-breakdown"></div>
+
+    <h2 class="section-title">상세 내역</h2>
+    <div id="reportEntries" class="report-entries"></div>
+
+    <h2 class="section-title">본부장 보고 문서</h2>
+    <textarea id="reportText" class="report-text" readonly rows="14"></textarea>
+
+    <div class="button-row">
+      <button type="button" id="copyReportBtn" class="btn btn-primary">복사</button>
+      <button type="button" id="printReportBtn" class="btn">인쇄</button>
+      <button type="button" id="resetReportBtn" class="btn btn-danger">초기화</button>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
