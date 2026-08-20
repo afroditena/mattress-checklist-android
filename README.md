@@ -2,6 +2,11 @@
 
 웹 체크리스트를 인터넷 없이 실행할 수 있도록 Android WebView 앱으로 구성한 프로젝트입니다.
 
+## APK 바로 받기
+이 브랜치에 푸시될 때마다 GitHub Actions가 자동으로 APK를 빌드해서
+[Releases](../../releases) 페이지에 올려둡니다. 가장 최근 릴리스에서
+`app-debug.apk`를 휴대폰으로 내려받아 설치하면 됩니다 (Android Studio 불필요).
+
 ## Android Studio에서 APK 만들기
 1. Android Studio에서 이 폴더를 엽니다.
 2. Gradle Sync가 완료될 때까지 기다립니다.
