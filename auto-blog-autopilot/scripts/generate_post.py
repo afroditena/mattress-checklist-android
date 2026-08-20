@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""
+매일 GitHub Actions에서 실행되어 블로그 글 1편을 자동 생성하는 스크립트.
+
+- data/topics.txt 에서 주제를 하나 꺼내 쓰고, 큐 맨 뒤로 돌려보낸다 (무한 로테이션).
+- 최근에 쓴 글 제목들을 함께 넘겨서 내용이 겹치지 않게 한다.
+- Claude API로 본문을 생성하고, docs/_posts/ 에 Jekyll 포스트 파일로 저장한다.
+- 쿠팡파트너스 관련 문구는 "검색 링크 + 고지문"까지만 자동 생성한다.
+  실제 수익화(트래킹되는 딥링크)로 바꾸려면 쿠팡파트너스 대시보드에서
+  해당 키워드로 딥링크를 만들어 주기적으로 교체해야 한다 (README 참고).
+"""
+
+import datetime
+import os
+import re
+import sys
+from pathlib import Path
+
+import anthropic
+
+# auto-blog-autopilot/scripts/generate_post.py -> auto-blog-autopilot/
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+# auto-blog-autopilot/ 의 형제 폴더인 docs/ (GitHub Pages 소스)
+DOCS_DIR = PROJECT_DIR.parent / "docs"
+
+TOPICS_FILE = PROJECT_DIR / "data" / "topics.txt"
+POSTS_DIR = DOCS_DIR / "_posts"
+
+MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5")
+MAX_RECENT_TITLES = 10
+
+
+def get_next_topic() -> str:
+    if not TOPICS_FILE.exists():
+        sys.exit(f"주제 큐 파일이 없습니다: {TOPICS_FILE}")
+
+    lines = [line.strip() for line in TOPICS_FILE.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        sys.exit(f"주제 큐가 비어 있습니다: {TOPICS_FILE}")
+
+    topic = lines[0]
+    rotated = lines[1:] + [topic]
+    TOPICS_FILE.write_text("\n".join(rotated) + "\n", encoding="utf-8")
+    return topic
+
+
+def get_recent_titles(limit: int = MAX_RECENT_TITLES) -> list[str]:
+    if not POSTS_DIR.exists():
+        return []
+
+    files = sorted(POSTS_DIR.glob("*.md"))[-limit:]
+    titles = []
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        match = re.search(r'^title:\s*"(.+)"\s*$', text, re.MULTILINE)
+        if match:
+            titles.append(match.group(1))
+    return titles
+
+
+def slugify(text: str) -> str:
+    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE).strip().lower()
+    text = re.sub(r"[\s_-]+", "-", text)
+    return text[:60] or "post"
+
+
+def build_prompt(topic: str, recent_titles: list[str]) -> str:
+    avoid_block = ""
+    if recent_titles:
+        recent_list = "\n".join(f"- {t}" for t in recent_titles)
+        avoid_block = f"\n최근에 이미 다룬 제목들이니 내용/각도가 겹치지 않게 새로운 관점으로 써줘:\n{recent_list}\n"
+
+    return f"""오늘의 주제: {topic}
+{avoid_block}
+아래 형식을 정확히 지켜서 한국어 블로그 글을 작성해줘.
+
+TITLE: (SEO에 좋은 구체적인 제목, 30자 내외, 과장/낚시성 문구 금지)
+TAGS: (쉼표로 구분된 태그 3~5개)
+KEYWORD: (이 글과 자연스럽게 어울리는 쇼핑 검색 키워드 1개, 예: "캠핑 의자")
+---
+(본문 마크다운. 1200~1800자 분량. 소제목(##) 2~4개.
+실용적인 정보 위주로 쓰고, 확인되지 않은 사실이나 과장된 효능/수익 약속은 절대 쓰지 마.
+말투는 자연스러운 존댓말 블로그 톤으로.)
+"""
+
+
+def call_claude(prompt: str) -> str:
+    client = anthropic.Anthropic()
+
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=4096,
+            output_config={"effort": "medium"},
+            system=(
+                "너는 한국어 생활정보 블로그의 자동 발행 시스템에서 콘텐츠를 작성하는 담당자다. "
+                "사실에 기반해서 쓰고, 과장 광고나 확정적인 효과·수익 약속은 절대 하지 않으며, "
+                "자연스러운 문체로 작성한다."
+            ),
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except anthropic.AuthenticationError:
+        sys.exit("ANTHROPIC_API_KEY가 잘못되었거나 설정되지 않았습니다.")
+    except anthropic.PermissionDeniedError:
+        sys.exit("API 키에 이 요청을 수행할 권한이 없습니다.")
+    except anthropic.NotFoundError:
+        sys.exit(f"모델을 찾을 수 없습니다: {MODEL}")
+    except anthropic.RateLimitError as e:
+        retry_after = e.response.headers.get("retry-after", "알 수 없음") if e.response else "알 수 없음"
+        sys.exit(f"레이트 리밋에 걸렸습니다. retry-after={retry_after}")
+    except anthropic.APIStatusError as e:
+        sys.exit(f"API 오류 (status={e.status_code}): {e.message}")
+    except anthropic.APIConnectionError:
+        sys.exit("네트워크 오류로 API에 연결하지 못했습니다.")
+
+    if response.stop_reason == "refusal":
+        sys.exit("Claude가 이 요청을 거절했습니다 (stop_reason=refusal). 주제를 확인해 주세요.")
+
+    for block in response.content:
+        if block.type == "text":
+            return block.text
+
+    sys.exit("응답에 텍스트 콘텐츠가 없습니다.")
+
+
+def parse_output(text: str) -> tuple[str, str, str, str]:
+    title_match = re.search(r"^TITLE:\s*(.+)$", text, re.MULTILINE)
+    tags_match = re.search(r"^TAGS:\s*(.+)$", text, re.MULTILINE)
+    keyword_match = re.search(r"^KEYWORD:\s*(.+)$", text, re.MULTILINE)
+
+    title = title_match.group(1).strip() if title_match else "자동 생성 포스트"
+    tags = tags_match.group(1).strip() if tags_match else ""
+    keyword = keyword_match.group(1).strip() if keyword_match else ""
+
+    body = text.split("---", 1)[-1].strip() if "---" in text else text.strip()
+    return title, tags, keyword, body
+
+
+def build_affiliate_block(keyword: str) -> str:
+    if not keyword:
+        return ""
+
+    query = keyword.replace(" ", "+")
+    # NOTE: 아래는 단순 검색 링크입니다 (수익화 안 됨).
+    # 실제로 수익이 붙게 하려면 쿠팡파트너스 대시보드에서
+    # 이 키워드로 "딥링크"를 생성해서 이 URL을 주기적으로 교체해야 합니다.
+    return (
+        "\n\n---\n\n"
+        f'🔗 관련 상품 보러가기: [쿠팡에서 "{keyword}" 검색하기]'
+        f"(https://www.coupang.com/np/search?q={query})\n\n"
+        "*(쿠팡파트너스 활동의 일환으로, 위 링크를 통해 상품을 구매하실 경우 "
+        "일정액의 수수료를 제공받을 수 있습니다.)*\n"
+    )
+
+
+def main() -> None:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
+
+    topic = get_next_topic()
+    recent_titles = get_recent_titles()
+
+    prompt = build_prompt(topic, recent_titles)
+    raw_output = call_claude(prompt)
+    title, tags, keyword, body = parse_output(raw_output)
+
+    today = datetime.date.today()
+    slug = slugify(title)
+    POSTS_DIR.mkdir(parents=True, exist_ok=True)
+    post_path = POSTS_DIR / f"{today.isoformat()}-{slug}.md"
+
+    tag_items = [t.strip() for t in tags.split(",") if t.strip()]
+    tag_list = ", ".join(f'"{t}"' for t in tag_items)
+    safe_title = title.replace('"', "'")
+
+    front_matter = (
+        "---\n"
+        "layout: post\n"
+        f'title: "{safe_title}"\n'
+        f"date: {today.isoformat()} 09:00:00 +0900\n"
+        f"tags: [{tag_list}]\n"
+        "---\n"
+    )
+
+    affiliate_block = build_affiliate_block(keyword)
+    post_path.write_text(front_matter + "\n" + body + affiliate_block, encoding="utf-8")
+
+    print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
+
+
+if __name__ == "__main__":
+    main()
