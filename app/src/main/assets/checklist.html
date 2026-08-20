@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>매트리스 점검 체크리스트</title>
+<style>
+  :root {
+    --primary: #2f6f4f;
+    --primary-dark: #1f4d36;
+    --yes: #2f6f4f;
+    --no: #b3441f;
+    --border: #dcdcdc;
+    --bg: #f6f5f2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Roboto, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: #222;
+  }
+  header {
+    background: var(--primary);
+    color: #fff;
+    padding: 16px 16px 14px;
+    text-align: center;
+  }
+  header h1 { margin: 0; font-size: 18px; }
+  header p { margin: 4px 0 0; font-size: 12px; opacity: 0.85; }
+
+  main { max-width: 600px; margin: 0 auto; padding: 12px 12px 96px; }
+
+  .info-card, .section, .summary-bar { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  .info-card { padding: 14px; margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .info-field { flex: 1 1 160px; }
+  .info-field label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+  .info-field input {
+    width: 100%; padding: 8px 10px; font-size: 14px;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff;
+  }
+
+  .summary-bar {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; justify-content: space-around; align-items: center;
+    padding: 10px 8px; margin-bottom: 12px; font-size: 13px;
+  }
+  .summary-bar .count { font-weight: 700; font-size: 16px; }
+  .summary-bar .yes .count { color: var(--yes); }
+  .summary-bar .no .count { color: var(--no); }
+  .summary-bar .pending .count { color: #999; }
+
+  .section { margin-bottom: 12px; padding: 4px 0 8px; }
+  .section h2 {
+    font-size: 14px; margin: 0; padding: 12px 14px 8px; color: var(--primary-dark);
+  }
+  .item {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 10px 14px; border-top: 1px solid #f0f0f0;
+  }
+  .item-label { font-size: 13.5px; line-height: 1.4; }
+
+  .toggle { display: flex; flex-shrink: 0; }
+  .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .toggle label {
+    display: inline-block; min-width: 44px; text-align: center;
+    padding: 6px 10px; margin-left: 6px; font-size: 12.5px;
+    border: 1px solid var(--border); border-radius: 999px;
+    color: #666; cursor: pointer; user-select: none;
+  }
+  .toggle input.opt-yes:checked + label { background: var(--yes); border-color: var(--yes); color: #fff; }
+  .toggle input.opt-no:checked + label { background: var(--no); border-color: var(--no); color: #fff; }
+
+  .actions {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; gap: 8px; padding: 10px 12px;
+    background: #fff; border-top: 1px solid var(--border);
+  }
+  .actions button {
+    flex: 1; padding: 12px 0; font-size: 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: #fff; color: #333;
+  }
+  .actions button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .actions button.danger { color: var(--no); border-color: var(--no); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%);
+    background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px;
+    border-radius: 20px; font-size: 13px; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .toast.show { opacity: 1; }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 10;
+    background: rgba(0,0,0,0.45); align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: #fff; border-radius: 10px; padding: 20px;
+    max-width: 320px; width: 100%; text-align: center;
+  }
+  .modal-box p { margin: 0 0 16px; font-size: 14px; line-height: 1.5; }
+  .modal-actions { display: flex; gap: 8px; }
+  .modal-actions button {
+    flex: 1; padding: 10px 0; font-size: 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: #fff; color: #333;
+  }
+  .modal-actions button.danger { background: var(--no); border-color: var(--no); color: #fff; }
+
+  @media print {
+    .actions, .toast, .modal-overlay { display: none; }
+    .summary-bar { position: static; }
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>매트리스 점검 체크리스트</h1>
+  <p>오프라인 앱 · 입력 내용은 이 기기에만 저장됩니다</p>
+</header>
+
+<main>
+  <div class="info-card">
+    <div class="info-field">
+      <label for="customerName">고객명</label>
+      <input type="text" id="customerName" placeholder="고객 이름을 입력하세요">
+    </div>
+    <div class="info-field">
+      <label for="inspectionDate">점검일</label>
+      <input type="date" id="inspectionDate">
+    </div>
+  </div>
+
+  <div class="summary-bar">
+    <div class="yes">예 <span class="count" id="countYes">0</span></div>
+    <div class="no">아니오 <span class="count" id="countNo">0</span></div>
+    <div class="pending">미응답 <span class="count" id="countPending">0</span></div>
+  </div>
+
+  <div id="checklist"></div>
+</main>
+
+<div class="actions">
+  <button id="btnReset" class="danger">초기화</button>
+  <button id="btnCopy">결과 복사</button>
+  <button id="btnPrint" class="primary">인쇄</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="resetOverlay">
+  <div class="modal-box">
+    <p>체크리스트를 초기화하시겠습니까?<br>입력한 내용이 모두 지워집니다.</p>
+    <div class="modal-actions">
+      <button id="resetCancel">취소</button>
+      <button id="resetConfirm" class="danger">초기화</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "mattressChecklistState";
+
+  var CHECKLIST = [
+    { section: "외관 상태", items: [
+      { id: "surface_clean", label: "매트리스 표면에 오염, 얼룩, 훼손이 없다" },
+      { id: "no_odor", label: "화학 냄새 등 이상한 냄새가 없다" },
+      { id: "cover_intact", label: "커버 원단이 찢어지거나 풀린 부분이 없다" },
+      { id: "seam_stitch", label: "이음새 박음질 상태가 양호하다" }
+    ]},
+    { section: "구조 및 기능", items: [
+      { id: "no_sag", label: "눌림이나 꺼짐 없이 표면이 고르다" },
+      { id: "spring_noise", label: "스프링/구조체에서 이상 소음이 없다" },
+      { id: "size_match", label: "사이즈가 주문 사양과 일치한다" },
+      { id: "frame_fixed", label: "다리/프레임(해당 시) 고정 상태가 양호하다" }
+    ]},
+    { section: "위생 및 부속품", items: [
+      { id: "zipper_ok", label: "지퍼(있는 경우) 개폐가 원활하다" },
+      { id: "tag_label", label: "라벨/택 부착 상태가 양호하다" },
+      { id: "accessories", label: "구성품(다리, 설명서 등)이 모두 포함되어 있다" },
+      { id: "packaging", label: "포장 상태가 양호하며 파손 흔적이 없다" }
+    ]}
+  ];
+
+  var checklistEl = document.getElementById("checklist");
+  var customerNameEl = document.getElementById("customerName");
+  var inspectionDateEl = document.getElementById("inspectionDate");
+  var toastEl = document.getElementById("toast");
+
+  function render() {
+    var html = "";
+    CHECKLIST.forEach(function (section) {
+      html += '<div class="section"><h2>' + section.section + "</h2>";
+      section.items.forEach(function (item) {
+        html +=
+          '<div class="item">' +
+            '<span class="item-label">' + item.label + "</span>" +
+            '<div class="toggle">' +
+              '<input type="radio" class="opt-yes" name="' + item.id + '" id="' + item.id + '_yes" value="yes">' +
+              '<label for="' + item.id + '_yes">예</label>' +
+              '<input type="radio" class="opt-no" name="' + item.id + '" id="' + item.id + '_no" value="no">' +
+              '<label for="' + item.id + '_no">아니오</label>' +
+            "</div>" +
+          "</div>";
+      });
+      html += "</div>";
+    });
+    checklistEl.innerHTML = html;
+  }
+
+  function totalItemCount() {
+    var total = 0;
+    CHECKLIST.forEach(function (section) { total += section.items.length; });
+    return total;
+  }
+
+  function getAnswers() {
+    var answers = {};
+    CHECKLIST.forEach(function (section) {
+      section.items.forEach(function (item) {
+        var checked = document.querySelector('input[name="' + item.id + '"]:checked');
+        if (checked) answers[item.id] = checked.value;
+      });
+    });
+    return answers;
+  }
+
+  function updateSummary() {
+    var answers = getAnswers();
+    var yes = 0, no = 0;
+    Object.keys(answers).forEach(function (id) {
+      if (answers[id] === "yes") yes++;
+      else if (answers[id] === "no") no++;
+    });
+    var pending = totalItemCount() - yes - no;
+    document.getElementById("countYes").textContent = yes;
+    document.getElementById("countNo").textContent = no;
+    document.getElementById("countPending").textContent = pending;
+  }
+
+  function save() {
+    var state = {
+      customerName: customerNameEl.value,
+      inspectionDate: inspectionDateEl.value,
+      answers: getAnswers()
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      /* storage unavailable - state simply won't persist across launches */
+    }
+  }
+
+  function load() {
+    var raw;
+    try {
+      raw = localStorage.getItem(STORAGE_KEY);
+    } catch (e) {
+      raw = null;
+    }
+    if (!raw) return;
+
+    var state;
+    try {
+      state = JSON.parse(raw);
+    } catch (e) {
+      return;
+    }
+
+    customerNameEl.value = state.customerName || "";
+    inspectionDateEl.value = state.inspectionDate || "";
+
+    var answers = state.answers || {};
+    Object.keys(answers).forEach(function (id) {
+      var input = document.getElementById(id + "_" + answers[id]);
+      if (input) input.checked = true;
+    });
+  }
+
+  function onChange() {
+    updateSummary();
+    save();
+  }
+
+  function showToast(message) {
+    toastEl.textContent = message;
+    toastEl.classList.add("show");
+    setTimeout(function () { toastEl.classList.remove("show"); }, 1600);
+  }
+
+  function buildResultText() {
+    var lines = [];
+    lines.push("매트리스 점검 체크리스트");
+    lines.push("고객명: " + (customerNameEl.value || "-"));
+    lines.push("점검일: " + (inspectionDateEl.value || "-"));
+    lines.push("");
+
+    var answers = getAnswers();
+    var yes = 0, no = 0;
+    CHECKLIST.forEach(function (section) {
+      lines.push("[" + section.section + "]");
+      section.items.forEach(function (item) {
+        var value = answers[item.id];
+        var label = value === "yes" ? "예" : value === "no" ? "아니오" : "미응답";
+        if (value === "yes") yes++;
+        else if (value === "no") no++;
+        lines.push("- " + item.label + ": " + label);
+      });
+      lines.push("");
+    });
+
+    var pending = totalItemCount() - yes - no;
+    lines.push("집계: 예 " + yes + "건 / 아니오 " + no + "건 / 미응답 " + pending + "건");
+    return lines.join("\n");
+  }
+
+  function copyResult() {
+    var text = buildResultText();
+
+    if (window.AndroidBridge && window.AndroidBridge.copyText) {
+      window.AndroidBridge.copyText(text);
+      return;
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        showToast("결과가 복사되었습니다");
+      }).catch(function () {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  function fallbackCopy(text) {
+    var textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand("copy");
+      showToast("결과가 복사되었습니다");
+    } catch (e) {
+      showToast("복사에 실패했습니다");
+    }
+    document.body.removeChild(textarea);
+  }
+
+  function printResult() {
+    if (window.AndroidBridge && window.AndroidBridge.printPage) {
+      window.AndroidBridge.printPage();
+    } else {
+      window.print();
+    }
+  }
+
+  var resetOverlay = document.getElementById("resetOverlay");
+
+  function resetAll() {
+    resetOverlay.classList.add("show");
+  }
+
+  function closeResetModal() {
+    resetOverlay.classList.remove("show");
+  }
+
+  function performReset() {
+    customerNameEl.value = "";
+    inspectionDateEl.value = "";
+    var checked = document.querySelectorAll('#checklist input:checked');
+    checked.forEach(function (input) { input.checked = false; });
+
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) { /* ignore */ }
+
+    updateSummary();
+    closeResetModal();
+    showToast("초기화되었습니다");
+  }
+
+  render();
+  load();
+  updateSummary();
+
+  checklistEl.addEventListener("change", onChange);
+  customerNameEl.addEventListener("input", onChange);
+  inspectionDateEl.addEventListener("change", onChange);
+
+  document.getElementById("btnCopy").addEventListener("click", copyResult);
+  document.getElementById("btnPrint").addEventListener("click", printResult);
+  document.getElementById("btnReset").addEventListener("click", resetAll);
+  document.getElementById("resetCancel").addEventListener("click", closeResetModal);
+  document.getElementById("resetConfirm").addEventListener("click", performReset);
+})();
+</script>
+</body>
+</html>

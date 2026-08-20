@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.MattressChecklist" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/mattress_primary</item>
+        <item name="android:colorPrimaryDark">@color/mattress_primary_dark</item>
+        <item name="android:statusBarColor">@color/mattress_primary_dark</item>
+        <item name="android:windowBackground">@color/mattress_background</item>
+    </style>
+</resources>
