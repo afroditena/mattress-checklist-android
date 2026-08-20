@@ -1,0 +1,44 @@
+name: Auto Blog Daily Post
+
+# 참고: 스케줄(cron) 트리거는 GitHub 정책상 "기본 브랜치(main)"에 있는
+# 워크플로 파일 기준으로만 동작합니다. 이 워크플로가 main에 병합되기 전까지는
+# 자동으로 실행되지 않고, Actions 탭에서 수동 실행(workflow_dispatch)만 가능합니다.
+on:
+  schedule:
+    - cron: "0 22 * * *" # 매일 UTC 22:00 = 한국시간(KST) 오전 7시
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  generate-post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r auto-blog-autopilot/requirements.txt
+
+      - name: Generate today's post
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python auto-blog-autopilot/scripts/generate_post.py
+
+      - name: Commit and push new post
+        run: |
+          git config user.name "auto-blog-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/_posts auto-blog-autopilot/data/topics.txt
+          if git diff --cached --quiet; then
+            echo "변경 사항 없음 - 커밋 건너뜀"
+          else
+            git commit -m "chore: 자동 블로그 포스트 발행 ($(date +%Y-%m-%d))"
+            git push
+          fi

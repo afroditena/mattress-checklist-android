@@ -1,0 +1,17 @@
+---
+layout: default
+---
+<h1>{{ page.title | default: site.title }}</h1>
+
+{% if site.posts.size > 0 %}
+<ul class="post-list">
+  {% for post in site.posts %}
+  <li>
+    <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
+    <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%Y-%m-%d" }}</time>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>아직 글이 없습니다. 곧 첫 글이 올라올 예정입니다.</p>
+{% endif %}
