@@ -70,6 +70,43 @@
 어렵습니다. 애드센스만으로도 충분히 무인 운영이 가능하니, 쿠팡 연동은
 선택사항으로 남겨두었습니다.
 
+### 5. (선택) 구글 Blogger에도 동시 발행
+
+같은 글을 [Blogger](https://blogger.com)에도 자동으로 함께 올릴 수 있습니다. 공식
+Blogger API를 쓰기 때문에 확실하게 자동화되지만, **설정 과정이 앞의 단계들보다
+좀 더 복잡합니다** (구글 클라우드 콘솔을 한 번 거쳐야 합니다). 참고로 한국
+독자 기준으로는 Blogger보다 네이버가 노출이 잘 되는 편이라, 이건 "추가 채널"
+정도로 생각하시면 됩니다.
+
+1. **Blogger 블로그 만들기**: https://blogger.com 에서 새 블로그 생성 (없으면).
+   블로그 설정(Settings) 페이지 URL에 있는 숫자가 "블로그 ID"입니다 — 메모해두세요.
+2. **구글 클라우드 콘솔에서 프로젝트 만들기**: https://console.cloud.google.com
+   → 새 프로젝트 생성.
+3. **Blogger API 사용 설정**: 왼쪽 메뉴 `API 및 서비스 → 라이브러리` → "Blogger API v3"
+   검색 → 사용(Enable).
+4. **OAuth 동의 화면 구성**: `API 및 서비스 → OAuth 동의 화면` → User Type: 외부 →
+   앱 이름 등 최소 정보만 입력 → 테스트 사용자에 본인 구글 계정 추가.
+5. **OAuth 클라이언트 ID 만들기**: `API 및 서비스 → 사용자 인증 정보 → 사용자 인증
+   정보 만들기 → OAuth 클라이언트 ID` → 애플리케이션 유형: 웹 애플리케이션 →
+   승인된 리디렉션 URI에 `https://developers.google.com/oauthplayground` 추가 →
+   생성되는 **클라이언트 ID**와 **클라이언트 보안 비밀**을 저장해두세요.
+6. **Refresh Token 발급** (OAuth Playground 이용, 코드 실행 없이 브라우저로만 진행):
+   - https://developers.google.com/oauthplayground 접속
+   - 오른쪽 위 톱니바퀴 아이콘 → "Use your own OAuth credentials" 체크 →
+     방금 만든 클라이언트 ID/보안 비밀 입력
+   - 왼쪽 목록에서 "Blogger API v3" 찾아서 `https://www.googleapis.com/auth/blogger`
+     스코프 체크 → **Authorize APIs** → 본인 구글 계정으로 로그인/동의
+   - **Exchange authorization code for tokens** 클릭 → 나오는 **Refresh token** 복사
+7. **GitHub Secrets에 4개 등록** (Settings → Secrets and variables → Actions):
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+   - `GOOGLE_REFRESH_TOKEN`
+   - `BLOGGER_BLOG_ID`
+
+이 4개가 모두 등록되면, 다음 자동 발행부터 같은 글이 Blogger에도 함께 올라갑니다.
+하나라도 비어 있으면 스크립트가 자동으로 Blogger 발행만 건너뛰고 GitHub Pages
+발행은 평소대로 계속됩니다 (즉, 이 설정을 안 해도 기존 기능은 전혀 영향 없습니다).
+
 ## 커스터마이징
 
 - **주제 추가/수정**: `data/topics.txt`에 한 줄씩 추가하면 됩니다.

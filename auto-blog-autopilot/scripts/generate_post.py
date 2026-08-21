@@ -8,15 +8,26 @@
 - 쿠팡파트너스 관련 문구는 "검색 링크 + 고지문"까지만 자동 생성한다.
   실제 수익화(트래킹되는 딥링크)로 바꾸려면 쿠팡파트너스 대시보드에서
   해당 키워드로 딥링크를 만들어 주기적으로 교체해야 한다 (README 참고).
+- 구글 Blogger API 인증 정보(GOOGLE_CLIENT_ID 등)가 설정되어 있으면,
+  같은 글을 Blogger에도 동시에 자동 발행한다 (설정 안 돼 있으면 조용히 건너뜀).
 """
 
 import datetime
+import json
 import os
 import re
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 import anthropic
+
+try:
+    import markdown as _markdown
+except ImportError:
+    _markdown = None
 
 # auto-blog-autopilot/scripts/generate_post.py -> auto-blog-autopilot/
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -28,6 +39,11 @@ POSTS_DIR = DOCS_DIR / "_posts"
 
 MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5")
 MAX_RECENT_TITLES = 10
+
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REFRESH_TOKEN = os.environ.get("GOOGLE_REFRESH_TOKEN", "")
+BLOGGER_BLOG_ID = os.environ.get("BLOGGER_BLOG_ID", "")
 
 
 def get_next_topic() -> str:
@@ -153,6 +169,71 @@ def build_affiliate_block(keyword: str) -> str:
     )
 
 
+def blogger_configured() -> bool:
+    return all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, BLOGGER_BLOG_ID])
+
+
+def get_google_access_token() -> str:
+    data = urllib.parse.urlencode(
+        {
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "refresh_token": GOOGLE_REFRESH_TOKEN,
+            "grant_type": "refresh_token",
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data, method="POST")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        payload = json.loads(resp.read())
+    return payload["access_token"]
+
+
+def markdown_to_html(text: str) -> str:
+    if _markdown is not None:
+        return _markdown.markdown(text)
+
+    # markdown 패키지가 없을 때를 위한 아주 단순한 대체 변환 (## 소제목, 문단만 처리)
+    html_lines = []
+    for line in text.split("\n"):
+        if line.startswith("## "):
+            html_lines.append(f"<h3>{line[3:]}</h3>")
+        elif line.strip():
+            html_lines.append(f"<p>{line}</p>")
+    return "\n".join(html_lines)
+
+
+def post_to_blogger(title: str, body_markdown: str) -> None:
+    """설정돼 있으면 같은 글을 구글 Blogger에도 발행한다. 실패해도 GitHub Pages
+    발행 자체를 막지 않도록, 여기서 나는 오류는 절대 sys.exit 하지 않고 그냥 건너뛴다."""
+    if not blogger_configured():
+        print("Blogger 인증 정보가 없어 Blogger 발행은 건너뜁니다.")
+        return
+
+    try:
+        access_token = get_google_access_token()
+    except (urllib.error.URLError, urllib.error.HTTPError, KeyError, ValueError) as e:
+        print(f"Blogger 액세스 토큰 갱신 실패, 이번 회차는 건너뜁니다: {e}")
+        return
+
+    payload = json.dumps({"title": title, "content": markdown_to_html(body_markdown)}).encode("utf-8")
+    url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/posts/"
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json; charset=utf-8",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read())
+        print(f"Blogger 발행 완료: {result.get('url', '(URL 확인 불가)')}")
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        print(f"Blogger 발행 실패, 이번 회차는 건너뜁니다: {e}")
+
+
 def main() -> None:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
@@ -186,6 +267,8 @@ def main() -> None:
     post_path.write_text(front_matter + "\n" + body + affiliate_block, encoding="utf-8")
 
     print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
+
+    post_to_blogger(safe_title, body + affiliate_block)
 
 
 if __name__ == "__main__":
