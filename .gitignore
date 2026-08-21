@@ -7,3 +7,14 @@
 .externalNativeBuild/
 .cxx/
 local.properties
+
+# Python (auto-blog-autopilot)
+auto-blog-autopilot/**/__pycache__/
+*.pyc
+
+# Jekyll build output (docs/ — GitHub Pages source)
+docs/_site/
+docs/.jekyll-cache/
+docs/.jekyll-metadata
+docs/vendor/
+docs/.bundle/
