@@ -139,14 +139,26 @@ def call_claude(prompt: str) -> str:
     sys.exit("응답에 텍스트 콘텐츠가 없습니다.")
 
 
-def parse_output(text: str) -> tuple[str, str, str, str]:
-    title_match = re.search(r"^TITLE:\s*(.+)$", text, re.MULTILINE)
-    tags_match = re.search(r"^TAGS:\s*(.+)$", text, re.MULTILINE)
-    keyword_match = re.search(r"^KEYWORD:\s*(.+)$", text, re.MULTILINE)
+def _find_field(text: str, label: str) -> str:
+    """text에서 "LABEL: 값" 형태의 줄을 찾아 값만 돌려준다.
 
-    title = title_match.group(1).strip() if title_match else "자동 생성 포스트"
-    tags = tags_match.group(1).strip() if tags_match else ""
-    keyword = keyword_match.group(1).strip() if keyword_match else ""
+    AI가 형식을 완전히 똑같이 지키지 않는 경우(라벨을 **굵게** 쓰거나,
+    콜론 앞에 공백을 넣거나, 전각 콜론 "："을 쓰는 등)에도 인식하도록
+    관대하게 매칭한다. 못 찾으면 빈 문자열을 돌려준다.
+    """
+    pattern = rf"^\s*[*_]{{0,2}}{re.escape(label)}[*_]{{0,2}}\s*[:：]\s*(.+?)\s*$"
+    match = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
+    if not match:
+        return ""
+    value = match.group(1).strip()
+    # 값 앞뒤에 남아있는 마크다운 강조나 따옴표도 정리
+    return re.sub(r'^[*_"\']+|[*_"\']+$', "", value).strip()
+
+
+def parse_output(text: str, fallback_title: str = "") -> tuple[str, str, str, str]:
+    title = _find_field(text, "TITLE") or fallback_title or "제목 미확인 포스트"
+    tags = _find_field(text, "TAGS")
+    keyword = _find_field(text, "KEYWORD")
 
     body = text.split("---", 1)[-1].strip() if "---" in text else text.strip()
     return title, tags, keyword, body
@@ -250,7 +262,7 @@ def main() -> None:
 
     prompt = build_prompt(topic, recent_titles)
     raw_output = call_claude(prompt)
-    title, tags, keyword, body = parse_output(raw_output)
+    title, tags, keyword, body = parse_output(raw_output, fallback_title=topic)
 
     today = datetime.date.today()
     slug = slugify(title)
