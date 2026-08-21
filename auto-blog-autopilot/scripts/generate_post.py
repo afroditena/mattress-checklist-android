@@ -183,8 +183,13 @@ def get_google_access_token() -> str:
         }
     ).encode("utf-8")
     req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data, method="POST")
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        payload = json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            payload = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        # 구글이 왜 거절했는지 본문에 이유가 담겨 있어서(예: invalid_grant),
+        # 그냥 "401 Unauthorized"만 찍으면 원인을 알 수 없다. 그대로 노출해서 로그에 남긴다.
+        raise urllib.error.HTTPError(e.url, e.code, f"{e.reason}: {e.read().decode('utf-8', 'replace')}", e.headers, None)
     return payload["access_token"]
 
 
@@ -230,7 +235,9 @@ def post_to_blogger(title: str, body_markdown: str) -> None:
         with urllib.request.urlopen(req, timeout=30) as resp:
             result = json.loads(resp.read())
         print(f"Blogger 발행 완료: {result.get('url', '(URL 확인 불가)')}")
-    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+    except urllib.error.HTTPError as e:
+        print(f"Blogger 발행 실패, 이번 회차는 건너뜁니다: {e.code} {e.reason}: {e.read().decode('utf-8', 'replace')}")
+    except urllib.error.URLError as e:
         print(f"Blogger 발행 실패, 이번 회차는 건너뜁니다: {e}")
 
 
