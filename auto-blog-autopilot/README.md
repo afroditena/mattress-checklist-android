@@ -107,6 +107,25 @@ Blogger API를 쓰기 때문에 확실하게 자동화되지만, **설정 과정
 하나라도 비어 있으면 스크립트가 자동으로 Blogger 발행만 건너뛰고 GitHub Pages
 발행은 평소대로 계속됩니다 (즉, 이 설정을 안 해도 기존 기능은 전혀 영향 없습니다).
 
+### 6. (선택) 글마다 어울리는 무료 사진 자동 삽입
+
+[Unsplash](https://unsplash.com)에서 그날 글 내용에 맞는 무료 스톡 사진을 찾아
+본문 맨 위에 자동으로 넣어줍니다 (사진작가·Unsplash 출처 표기 포함). 앞의
+Blogger 설정보다 훨씬 간단합니다 — 로그인 인증 절차 없이 키 하나만 발급받으면
+끝입니다.
+
+1. https://unsplash.com/developers 접속 → 계정 없으면 가입 → **"Your apps"** →
+   **"New Application"** 클릭
+2. 약관 체크 후 앱 이름/설명 아무거나 입력 (예: 이름 `auto-blog-autopilot`,
+   설명 `personal blog automation`)
+3. 만들어진 앱 페이지에서 **"Access Key"** 복사
+4. **GitHub Secrets에 등록** (Settings → Secrets and variables → Actions):
+   - `UNSPLASH_ACCESS_KEY`
+
+이것만 등록하면 다음 발행부터 사진이 자동으로 붙습니다. 미설정 시에는 사진 없이
+글만 발행되니, 역시 이 설정을 안 해도 기존 기능에 영향 없습니다. 무료(Demo) 앱
+기준 시간당 50회 요청 한도가 있는데, 하루 1편 발행에는 충분합니다.
+
 ## 커스터마이징
 
 - **주제 추가/수정**: `data/topics.txt`에 한 줄씩 추가하면 됩니다.

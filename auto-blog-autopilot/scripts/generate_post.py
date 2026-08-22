@@ -10,6 +10,9 @@
   해당 키워드로 딥링크를 만들어 주기적으로 교체해야 한다 (README 참고).
 - 구글 Blogger API 인증 정보(GOOGLE_CLIENT_ID 등)가 설정되어 있으면,
   같은 글을 Blogger에도 동시에 자동 발행한다 (설정 안 돼 있으면 조용히 건너뜀).
+- UNSPLASH_ACCESS_KEY가 설정되어 있으면, 글 내용에 맞는 무료 스톡 사진을
+  Unsplash에서 찾아 본문 맨 위에 넣는다 (출처 표기 포함, 설정 안 돼 있으면
+  조용히 건너뜀).
 """
 
 import datetime
@@ -44,6 +47,9 @@ GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REFRESH_TOKEN = os.environ.get("GOOGLE_REFRESH_TOKEN", "")
 BLOGGER_BLOG_ID = os.environ.get("BLOGGER_BLOG_ID", "")
+
+UNSPLASH_ACCESS_KEY = os.environ.get("UNSPLASH_ACCESS_KEY", "")
+UNSPLASH_APP_NAME = os.environ.get("UNSPLASH_APP_NAME", "auto-blog-autopilot")
 
 
 def get_next_topic() -> str:
@@ -93,6 +99,8 @@ def build_prompt(topic: str, recent_titles: list[str]) -> str:
 TITLE: (SEO에 좋은 구체적인 제목, 30자 내외, 과장/낚시성 문구 금지)
 TAGS: (쉼표로 구분된 태그 3~5개)
 KEYWORD: (이 글과 자연스럽게 어울리는 쇼핑 검색 키워드 1개, 예: "캠핑 의자")
+IMAGE_QUERY: (이 글에 어울리는 사진을 찾기 위한 영어 검색어 2~4단어,
+  구체적인 장면 위주로. 예: "cozy home office desk", "camping tent morning")
 ---
 (본문 마크다운. 1200~1800자 분량. 소제목(##) 2~4개.
 실용적인 정보 위주로 쓰고, 확인되지 않은 사실이나 과장된 효능/수익 약속은 절대 쓰지 마.
@@ -155,13 +163,14 @@ def _find_field(text: str, label: str) -> str:
     return re.sub(r'^[*_"\']+|[*_"\']+$', "", value).strip()
 
 
-def parse_output(text: str, fallback_title: str = "") -> tuple[str, str, str, str]:
+def parse_output(text: str, fallback_title: str = "") -> tuple[str, str, str, str, str]:
     title = _find_field(text, "TITLE") or fallback_title or "제목 미확인 포스트"
     tags = _find_field(text, "TAGS")
     keyword = _find_field(text, "KEYWORD")
+    image_query = _find_field(text, "IMAGE_QUERY")
 
     body = text.split("---", 1)[-1].strip() if "---" in text else text.strip()
-    return title, tags, keyword, body
+    return title, tags, keyword, image_query, body
 
 
 def build_affiliate_block(keyword: str) -> str:
@@ -178,6 +187,67 @@ def build_affiliate_block(keyword: str) -> str:
         f"(https://www.coupang.com/np/search?q={query})\n\n"
         "*(쿠팡파트너스 활동의 일환으로, 위 링크를 통해 상품을 구매하실 경우 "
         "일정액의 수수료를 제공받을 수 있습니다.)*\n"
+    )
+
+
+def find_stock_photo(query: str) -> dict | None:
+    """Unsplash에서 query에 맞는 무료 사진 1장을 찾아 정보를 돌려준다.
+    설정이 없거나 실패하면 None을 돌려주고, 절대 sys.exit 하지 않는다
+    (이미지는 있으면 좋은 부가 기능이지, 없다고 글 발행 자체를 막으면 안 된다)."""
+    if not UNSPLASH_ACCESS_KEY or not query:
+        return None
+
+    params = urllib.parse.urlencode({"query": query, "per_page": 1, "orientation": "landscape"})
+    req = urllib.request.Request(
+        f"https://api.unsplash.com/search/photos?{params}",
+        headers={"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read())
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as e:
+        print(f"Unsplash 사진 검색 실패, 이미지 없이 계속합니다: {e}")
+        return None
+
+    results = payload.get("results") or []
+    if not results:
+        print(f"Unsplash에서 '{query}'에 맞는 사진을 못 찾았습니다, 이미지 없이 계속합니다.")
+        return None
+
+    photo = results[0]
+
+    # Unsplash API 가이드라인상, 실제로 사진을 사용할 때는 download_location을
+    # 한 번 호출해줘야 한다 (사진작가 통계에 반영됨). 실패해도 무시한다.
+    download_location = (photo.get("links") or {}).get("download_location")
+    if download_location:
+        try:
+            ping = urllib.request.Request(
+                download_location, headers={"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
+            )
+            urllib.request.urlopen(ping, timeout=10).close()
+        except (urllib.error.URLError, urllib.error.HTTPError):
+            pass
+
+    return {
+        "url": (photo.get("urls") or {}).get("regular", ""),
+        "alt": photo.get("alt_description") or query,
+        "photographer_name": (photo.get("user") or {}).get("name", "Unsplash"),
+        "photographer_url": (photo.get("user") or {}).get("links", {}).get("html", "https://unsplash.com"),
+    }
+
+
+def build_image_block(photo: dict | None) -> str:
+    if not photo or not photo.get("url"):
+        return ""
+
+    utm = f"utm_source={UNSPLASH_APP_NAME}&utm_medium=referral"
+    photographer_link = f"{photo['photographer_url']}?{utm}"
+    unsplash_link = f"https://unsplash.com/?{utm}"
+
+    return (
+        f"![{photo['alt']}]({photo['url']})\n"
+        f"*Photo by [{photo['photographer_name']}]({photographer_link}) on "
+        f"[Unsplash]({unsplash_link})*\n\n"
     )
 
 
@@ -262,7 +332,11 @@ def main() -> None:
 
     prompt = build_prompt(topic, recent_titles)
     raw_output = call_claude(prompt)
-    title, tags, keyword, body = parse_output(raw_output, fallback_title=topic)
+    title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=topic)
+
+    photo = find_stock_photo(image_query or keyword or topic)
+    image_block = build_image_block(photo)
+    body = image_block + body
 
     today = datetime.date.today()
     slug = slugify(title)
