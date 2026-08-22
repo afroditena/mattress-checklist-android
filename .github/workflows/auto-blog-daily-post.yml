@@ -34,6 +34,8 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
+          # 무료 스톡 사진(Unsplash) 자동 삽입용 (선택, 미설정이면 이미지 없이 발행)
+          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
         run: python auto-blog-autopilot/scripts/generate_post.py
 
       - name: Commit and push new post
