@@ -7,6 +7,16 @@
   <meta name="description" content="{{ page.description | default: site.description }}">
   {% feed_meta %}
   {% include head-custom.html %}
+  {% if site.google_analytics %}
+  <!-- Google Analytics 4 (GA4) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ site.google_analytics }}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', '{{ site.google_analytics }}');
+  </script>
+  {% endif %}
   <style>
     :root {
       color-scheme: light dark;

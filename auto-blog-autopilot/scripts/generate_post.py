@@ -13,6 +13,13 @@
 - UNSPLASH_ACCESS_KEY가 설정되어 있으면, 글 내용에 맞는 무료 스톡 사진을
   Unsplash에서 찾아 본문 맨 위에 넣는다 (출처 표기 포함, 설정 안 돼 있으면
   조용히 건너뜀).
+- 주제를 고를 때 단순 순환(FIFO)만 하지 않고, 큐 맨 앞의 5개 후보를 놓고
+  (1) Google 트렌드로 최근 검색량이 높은지, (2) GA4에 이 블로그의 과거
+  인기글과 겹치는 주제인지(조회수+체류시간 기준)를 함께 점수화해서
+  1~5위를 매긴 뒤 1위 주제로 글을 쓴다. 둘 다 설정/조회가 안 되면
+  (GA4_PROPERTY_ID/GA4_SERVICE_ACCOUNT_JSON 미설정, pytrends 조회 실패 등)
+  조용히 기존 큐 순서(FIFO) 그대로 동작한다 — 즉 이 기능이 없어도 전혀
+  문제 없이 발행된다.
 """
 
 import datetime
@@ -51,8 +58,16 @@ BLOGGER_BLOG_ID = os.environ.get("BLOGGER_BLOG_ID", "")
 UNSPLASH_ACCESS_KEY = os.environ.get("UNSPLASH_ACCESS_KEY", "")
 UNSPLASH_APP_NAME = os.environ.get("UNSPLASH_APP_NAME", "auto-blog-autopilot")
 
+GA4_PROPERTY_ID = os.environ.get("GA4_PROPERTY_ID", "")
+GA4_SERVICE_ACCOUNT_JSON = os.environ.get("GA4_SERVICE_ACCOUNT_JSON", "")
+
+CANDIDATE_POOL_SIZE = 5
+
 
 def get_next_topic() -> str:
+    """예전 방식(단순 FIFO 순환)의 주제 선택. 지금은 select_topic()이 대신
+    쓰이지만, 트렌드/GA4 조회가 전부 실패했을 때의 동작과 동일하므로 참고용으로
+    남겨둔다."""
     if not TOPICS_FILE.exists():
         sys.exit(f"주제 큐 파일이 없습니다: {TOPICS_FILE}")
 
@@ -63,6 +78,192 @@ def get_next_topic() -> str:
     topic = lines[0]
     rotated = lines[1:] + [topic]
     TOPICS_FILE.write_text("\n".join(rotated) + "\n", encoding="utf-8")
+    return topic
+
+
+def score_candidates_by_trends(candidates: list[str]) -> dict[str, float]:
+    """Google 트렌드(pytrends, 비공식/무료)로 최근 1개월 한국 검색 관심도를
+    후보별로 점수화한다. pytrends는 로그인/키 없이 쓸 수 있지만 비공식 API라
+    레이트리밋이나 스키마 변경에 취약하다 — 실패하면 빈 dict를 돌려주고
+    절대 예외를 전파하지 않는다 (검색량 순위 없이 계속 진행)."""
+    if not candidates:
+        return {}
+
+    try:
+        from pytrends.request import TrendReq
+    except ImportError as e:
+        print(f"pytrends가 설치되어 있지 않아 검색량 기반 순위는 건너뜁니다: {e}")
+        return {}
+
+    kw_list = candidates[:5]  # pytrends는 한 번에 최대 5개 키워드까지만 비교 가능
+    try:
+        trends = TrendReq(hl="ko", tz=540)
+        trends.build_payload(kw_list, timeframe="today 1-m", geo="KR")
+        df = trends.interest_over_time()
+    except Exception as e:  # pytrends는 다양한 예외(HTTP, 파싱 등)를 던질 수 있음
+        print(f"Google 트렌드 조회 실패, 검색량 기반 순위 없이 계속합니다: {e}")
+        return {}
+
+    if df is None or df.empty:
+        return {}
+
+    scores = {}
+    for kw in kw_list:
+        if kw in df.columns:
+            scores[kw] = float(df[kw].mean())
+    return scores
+
+
+def ga4_configured() -> bool:
+    return bool(GA4_PROPERTY_ID and GA4_SERVICE_ACCOUNT_JSON)
+
+
+def fetch_ga4_top_pages(days: int = 28) -> list[dict]:
+    """최근 N일간 이 블로그(GitHub Pages)의 GA4 데이터에서 조회수 상위 글들을
+    (조회수, 평균 체류시간)과 함께 가져온다. 서비스 계정 인증에 필요한
+    google-auth만 쓰고, 무거운 공식 google-analytics-data 클라이언트(grpc/
+    protobuf 포함)는 쓰지 않는다 — REST API를 직접 호출한다.
+    설정이 없거나 인증/조회가 실패하면 빈 리스트를 돌려주고 절대 예외를
+    전파하지 않는다 (GA4 데이터 없이 트렌드만으로, 또는 기존 순환으로 계속
+    진행). 데이터가 아직 쌓이지 않은 초기 몇 주간은 항상 빈 리스트가 정상이다."""
+    if not ga4_configured():
+        return []
+
+    try:
+        from google.oauth2 import service_account
+        from google.auth.transport.requests import Request
+        import requests
+    except BaseException as e:
+        # 일부 환경에서는 google-auth가 의존하는 cryptography 패키지가
+        # 시스템에 이미 깔린(apt 등) 다른 버전과 충돌해 ImportError가 아니라
+        # PyO3 쪽 PanicException(BaseException 계열, 일반 Exception으로도 못 잡힘)을
+        # 던지는 경우가 있다. GA4는 어디까지나 선택 기능이라 이런 경우에도
+        # 전체 발행이 죽으면 안 되므로 BaseException까지 넓게 잡아 건너뛴다.
+        print(f"GA4 연동에 필요한 패키지를 불러오지 못해 건너뜁니다: {e}")
+        return []
+
+    try:
+        info = json.loads(GA4_SERVICE_ACCOUNT_JSON)
+        credentials = service_account.Credentials.from_service_account_info(
+            info, scopes=["https://www.googleapis.com/auth/analytics.readonly"]
+        )
+        credentials.refresh(Request())
+    except Exception as e:
+        print(f"GA4 인증 실패, GA4 데이터 없이 계속합니다: {e}")
+        return []
+
+    property_id = GA4_PROPERTY_ID if GA4_PROPERTY_ID.isdigit() else GA4_PROPERTY_ID.replace("properties/", "")
+    url = f"https://analyticsdata.googleapis.com/v1beta/properties/{property_id}:runReport"
+    body = {
+        "dateRanges": [{"startDate": f"{days}daysAgo", "endDate": "today"}],
+        "dimensions": [{"name": "pageTitle"}],
+        "metrics": [{"name": "screenPageViews"}, {"name": "userEngagementDuration"}],
+        "orderBys": [{"metric": {"metricName": "screenPageViews"}, "desc": True}],
+        "limit": 20,
+    }
+    try:
+        resp = requests.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {credentials.token}",
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(body),
+            timeout=30,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as e:
+        print(f"GA4 리포트 조회 실패, GA4 데이터 없이 계속합니다: {e}")
+        return []
+
+    rows = payload.get("rows") or []
+    results = []
+    for row in rows:
+        try:
+            title = row["dimensionValues"][0]["value"]
+            pageviews = float(row["metricValues"][0]["value"])
+            engagement = float(row["metricValues"][1]["value"])
+            results.append({"title": title, "pageviews": pageviews, "engagement_seconds": engagement})
+        except (KeyError, IndexError, ValueError):
+            continue
+    return results
+
+
+def score_candidates_by_ga4(candidates: list[str], ga4_pages: list[dict]) -> dict[str, float]:
+    """GA4 인기글 제목과 후보 주제 문자열 사이의 단어 겹침으로, 각 후보가
+    "과거에 실제로 조회수+체류시간이 좋았던 주제"와 얼마나 비슷한지 점수화한다.
+    (GA4 페이지 제목은 Jekyll의 `{{ page.title }} · {{ site.title }}` 형식이라
+    완전 일치는 기대하지 않고, 어디까지나 근사치 힌트로만 쓴다.)"""
+    if not ga4_pages:
+        return {}
+
+    max_pv = max((p["pageviews"] for p in ga4_pages), default=0) or 1
+    max_eng = max((p["engagement_seconds"] for p in ga4_pages), default=0) or 1
+
+    scores = {c: 0.0 for c in candidates}
+    for page in ga4_pages:
+        title_tokens = set(re.findall(r"[가-힣A-Za-z0-9]+", page["title"]))
+        pv_norm = page["pageviews"] / max_pv
+        eng_norm = page["engagement_seconds"] / max_eng
+        page_score = pv_norm * 0.5 + eng_norm * 0.5  # 조회수와 체류시간을 절반씩 반영
+        for candidate in candidates:
+            cand_tokens = set(re.findall(r"[가-힣A-Za-z0-9]+", candidate))
+            overlap = len(title_tokens & cand_tokens)
+            if overlap:
+                scores[candidate] += overlap * page_score
+    return scores
+
+
+def select_topic() -> str:
+    """큐 맨 앞 CANDIDATE_POOL_SIZE개 후보를 놓고 검색량(Google 트렌드)과
+    자체 유입량/체류시간(GA4)을 함께 점수화해서 1~5위를 매긴 뒤, 1위 주제로
+    글을 쓴다. 선택된 주제만 큐 맨 뒤로 돌리고 나머지 후보는 그대로 앞쪽에
+    남겨서, 이번에 밀린 후보들이 다음날 다시 후보 풀에 들어가게 한다.
+    트렌드/GA4 조회가 둘 다 실패하면 기존 FIFO와 동일하게 동작한다."""
+    if not TOPICS_FILE.exists():
+        sys.exit(f"주제 큐 파일이 없습니다: {TOPICS_FILE}")
+
+    lines = [line.strip() for line in TOPICS_FILE.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        sys.exit(f"주제 큐가 비어 있습니다: {TOPICS_FILE}")
+
+    pool_size = min(CANDIDATE_POOL_SIZE, len(lines))
+    candidates = lines[:pool_size]
+
+    trend_scores = score_candidates_by_trends(candidates)
+    ga4_pages = fetch_ga4_top_pages()
+    ga4_scores = score_candidates_by_ga4(candidates, ga4_pages)
+
+    def normalize(d: dict[str, float]) -> dict[str, float]:
+        if not d:
+            return {}
+        max_v = max(d.values()) or 1
+        return {k: v / max_v for k, v in d.items()}
+
+    trend_norm = normalize(trend_scores)
+    ga4_norm = normalize(ga4_scores)
+
+    combined = {c: trend_norm.get(c, 0.0) * 0.5 + ga4_norm.get(c, 0.0) * 0.5 for c in candidates}
+
+    if trend_scores or ga4_scores:
+        ranked = sorted(candidates, key=lambda c: combined[c], reverse=True)
+    else:
+        ranked = list(candidates)  # 둘 다 실패하면 기존 큐 순서(FIFO) 그대로
+
+    print(f"오늘의 주제 후보 순위 (1~{len(ranked)}위):")
+    for i, c in enumerate(ranked, start=1):
+        print(
+            f"  {i}위: {c}  "
+            f"(검색량점수={trend_scores.get(c, 0.0):.1f}, GA4점수={ga4_scores.get(c, 0.0):.2f})"
+        )
+
+    topic = ranked[0]
+
+    remaining = [line for line in lines if line != topic]
+    rotated = remaining + [topic]
+    TOPICS_FILE.write_text("\n".join(rotated) + "\n", encoding="utf-8")
+
     return topic
 
 
@@ -327,7 +528,7 @@ def main() -> None:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
 
-    topic = get_next_topic()
+    topic = select_topic()
     recent_titles = get_recent_titles()
 
     prompt = build_prompt(topic, recent_titles)
