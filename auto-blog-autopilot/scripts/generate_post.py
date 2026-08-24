@@ -153,8 +153,11 @@ def score_candidates_by_naver_datalab(candidates: list[str]) -> dict[str, float]
         resp = requests.post(
             "https://openapi.naver.com/v1/datalab/search",
             headers={
-                "X-Naver-Client-Id": NAVER_CLIENT_ID,
-                "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+                # 네이버 데이터랩 API는 NAVER Cloud Platform(NCP) API Gateway를
+                # 통해 제공되어, 예전 개발자센터 방식(X-Naver-Client-Id 등)이
+                # 아니라 NCP APIGW 전용 헤더 이름을 써야 한다.
+                "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
+                "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
                 "Content-Type": "application/json",
             },
             data=json.dumps(body),
