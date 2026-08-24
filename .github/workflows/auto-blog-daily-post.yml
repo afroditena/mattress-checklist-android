@@ -36,6 +36,14 @@ jobs:
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
           # 무료 스톡 사진(Unsplash) 자동 삽입용 (선택, 미설정이면 이미지 없이 발행)
           UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
+          # 주제 선정 시 GA4(자체 유입량/체류시간) 순위 매기기용
+          # (선택, 미설정이면 검색량 순위만 또는 기존 큐 순서(FIFO)로 동작)
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+          GA4_SERVICE_ACCOUNT_JSON: ${{ secrets.GA4_SERVICE_ACCOUNT_JSON }}
+          # 주제 선정 시 네이버 데이터랩(검색어트렌드) 순위 매기기용
+          # (선택, 미설정이면 이 신호 없이 동작)
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: python auto-blog-autopilot/scripts/generate_post.py
 
       - name: Commit and push new post

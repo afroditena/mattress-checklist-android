@@ -5,3 +5,8 @@ plugins:
   - jekyll-feed
 
 # 자동화 스크립트가 이 폴더(docs/_posts)에 매일 새 글을 커밋합니다.
+
+# GA4 측정 ID (예: "G-XXXXXXXXXX"). 이 값은 비밀값이 아니라 공개 페이지에
+# 그대로 노출되는 값이라 GitHub Secrets가 아니라 여기 직접 적으면 됩니다.
+# 비워두면 추적 스크립트 자체가 삽입되지 않습니다 (README "7. GA4" 참고).
+google_analytics: ""
