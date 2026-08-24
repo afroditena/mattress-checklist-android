@@ -14,12 +14,14 @@
   Unsplash에서 찾아 본문 맨 위에 넣는다 (출처 표기 포함, 설정 안 돼 있으면
   조용히 건너뜀).
 - 주제를 고를 때 단순 순환(FIFO)만 하지 않고, 큐 맨 앞의 5개 후보를 놓고
-  (1) Google 트렌드로 최근 검색량이 높은지, (2) GA4에 이 블로그의 과거
-  인기글과 겹치는 주제인지(조회수+체류시간 기준)를 함께 점수화해서
-  1~5위를 매긴 뒤 1위 주제로 글을 쓴다. 둘 다 설정/조회가 안 되면
-  (GA4_PROPERTY_ID/GA4_SERVICE_ACCOUNT_JSON 미설정, pytrends 조회 실패 등)
-  조용히 기존 큐 순서(FIFO) 그대로 동작한다 — 즉 이 기능이 없어도 전혀
-  문제 없이 발행된다.
+  (1) Google 트렌드, (2) 네이버 데이터랩(검색어트렌드 공식 API)으로 최근
+  검색량이 높은지, (3) GA4에 이 블로그의 과거 인기글과 겹치는 주제인지
+  (조회수+체류시간 기준)를 함께 점수화해서 1~5위를 매긴 뒤 1위 주제로
+  글을 쓴다. 세 신호 모두 선택 사항이며, 설정/조회가 안 되면
+  (NAVER_CLIENT_ID/SECRET, GA4_PROPERTY_ID/GA4_SERVICE_ACCOUNT_JSON
+  미설정, pytrends 조회 실패 등) 조용히 살아있는 신호만으로, 전부
+  실패하면 기존 큐 순서(FIFO) 그대로 동작한다 — 즉 이 기능이 없어도
+  전혀 문제 없이 발행된다.
 """
 
 import datetime
@@ -60,6 +62,9 @@ UNSPLASH_APP_NAME = os.environ.get("UNSPLASH_APP_NAME", "auto-blog-autopilot")
 
 GA4_PROPERTY_ID = os.environ.get("GA4_PROPERTY_ID", "")
 GA4_SERVICE_ACCOUNT_JSON = os.environ.get("GA4_SERVICE_ACCOUNT_JSON", "")
+
+NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
+NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
 
 CANDIDATE_POOL_SIZE = 5
 
@@ -111,6 +116,63 @@ def score_candidates_by_trends(candidates: list[str]) -> dict[str, float]:
     for kw in kw_list:
         if kw in df.columns:
             scores[kw] = float(df[kw].mean())
+    return scores
+
+
+def naver_configured() -> bool:
+    return bool(NAVER_CLIENT_ID and NAVER_CLIENT_SECRET)
+
+
+def score_candidates_by_naver_datalab(candidates: list[str]) -> dict[str, float]:
+    """네이버 데이터랩 "검색어트렌드" 공식 오픈 API로 최근 1개월간 한국 검색
+    관심도를 후보별로 점수화한다. 개인 계정 로그인 세션이 아니라, 네이버
+    개발자센터(developers.naver.com)에서 앱 하나 등록하면 받는 Client ID/
+    Secret만 쓰는 공식 REST API다 (Unsplash 키 발급과 비슷한 난이도).
+    한국 사용자 기준으로는 Google 트렌드보다 이 신호가 더 정확한 편이라
+    같이 참고한다. 미설정이거나 조회가 실패하면 빈 dict를 돌려주고
+    절대 예외를 전파하지 않는다 (이 신호 없이 계속 진행)."""
+    if not naver_configured() or not candidates:
+        return {}
+
+    try:
+        import requests
+    except ImportError as e:
+        print(f"requests가 설치되어 있지 않아 네이버 데이터랩 조회를 건너뜁니다: {e}")
+        return {}
+
+    kw_list = candidates[:5]  # 데이터랩 검색어트렌드는 그룹 최대 5개까지 비교 가능
+    end_date = datetime.date.today()
+    start_date = end_date - datetime.timedelta(days=30)
+    body = {
+        "startDate": start_date.isoformat(),
+        "endDate": end_date.isoformat(),
+        "timeUnit": "date",
+        "keywordGroups": [{"groupName": kw, "keywords": [kw]} for kw in kw_list],
+    }
+    try:
+        resp = requests.post(
+            "https://openapi.naver.com/v1/datalab/search",
+            headers={
+                "X-Naver-Client-Id": NAVER_CLIENT_ID,
+                "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(body),
+            timeout=30,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as e:
+        print(f"네이버 데이터랩 조회 실패, 이 신호 없이 계속합니다: {e}")
+        return {}
+
+    scores = {}
+    for result in payload.get("results", []):
+        group_name = result.get("title", "")
+        data_points = result.get("data") or []
+        if data_points:
+            avg_ratio = sum(p.get("ratio", 0) for p in data_points) / len(data_points)
+            scores[group_name] = avg_ratio
     return scores
 
 
@@ -216,11 +278,13 @@ def score_candidates_by_ga4(candidates: list[str], ga4_pages: list[dict]) -> dic
 
 
 def select_topic() -> str:
-    """큐 맨 앞 CANDIDATE_POOL_SIZE개 후보를 놓고 검색량(Google 트렌드)과
-    자체 유입량/체류시간(GA4)을 함께 점수화해서 1~5위를 매긴 뒤, 1위 주제로
-    글을 쓴다. 선택된 주제만 큐 맨 뒤로 돌리고 나머지 후보는 그대로 앞쪽에
-    남겨서, 이번에 밀린 후보들이 다음날 다시 후보 풀에 들어가게 한다.
-    트렌드/GA4 조회가 둘 다 실패하면 기존 FIFO와 동일하게 동작한다."""
+    """큐 맨 앞 CANDIDATE_POOL_SIZE개 후보를 놓고 검색량(Google 트렌드,
+    네이버 데이터랩)과 자체 유입량/체류시간(GA4)을 함께 점수화해서 1~5위를
+    매긴 뒤, 1위 주제로 글을 쓴다. 선택된 주제만 큐 맨 뒤로 돌리고 나머지
+    후보는 그대로 앞쪽에 남겨서, 이번에 밀린 후보들이 다음날 다시 후보
+    풀에 들어가게 한다. 세 신호가 전부 실패/미설정이면 기존 FIFO와
+    동일하게 동작하고, 일부만 살아있으면 살아있는 신호만 동일 가중치로
+    평균 낸다 (신호가 적다고 순위가 왜곡되지 않도록)."""
     if not TOPICS_FILE.exists():
         sys.exit(f"주제 큐 파일이 없습니다: {TOPICS_FILE}")
 
@@ -232,6 +296,7 @@ def select_topic() -> str:
     candidates = lines[:pool_size]
 
     trend_scores = score_candidates_by_trends(candidates)
+    naver_scores = score_candidates_by_naver_datalab(candidates)
     ga4_pages = fetch_ga4_top_pages()
     ga4_scores = score_candidates_by_ga4(candidates, ga4_pages)
 
@@ -241,21 +306,26 @@ def select_topic() -> str:
         max_v = max(d.values()) or 1
         return {k: v / max_v for k, v in d.items()}
 
-    trend_norm = normalize(trend_scores)
-    ga4_norm = normalize(ga4_scores)
+    available_signals = [
+        normalize(s) for s in (trend_scores, naver_scores, ga4_scores) if s
+    ]
 
-    combined = {c: trend_norm.get(c, 0.0) * 0.5 + ga4_norm.get(c, 0.0) * 0.5 for c in candidates}
-
-    if trend_scores or ga4_scores:
+    if available_signals:
+        combined = {
+            c: sum(sig.get(c, 0.0) for sig in available_signals) / len(available_signals)
+            for c in candidates
+        }
         ranked = sorted(candidates, key=lambda c: combined[c], reverse=True)
     else:
-        ranked = list(candidates)  # 둘 다 실패하면 기존 큐 순서(FIFO) 그대로
+        ranked = list(candidates)  # 신호가 전부 실패하면 기존 큐 순서(FIFO) 그대로
 
     print(f"오늘의 주제 후보 순위 (1~{len(ranked)}위):")
     for i, c in enumerate(ranked, start=1):
         print(
             f"  {i}위: {c}  "
-            f"(검색량점수={trend_scores.get(c, 0.0):.1f}, GA4점수={ga4_scores.get(c, 0.0):.2f})"
+            f"(구글트렌드={trend_scores.get(c, 0.0):.1f}, "
+            f"네이버데이터랩={naver_scores.get(c, 0.0):.1f}, "
+            f"GA4={ga4_scores.get(c, 0.0):.2f})"
         )
 
     topic = ranked[0]
