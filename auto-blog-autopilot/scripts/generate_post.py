@@ -49,6 +49,13 @@ DOCS_DIR = PROJECT_DIR.parent / "docs"
 TOPICS_FILE = PROJECT_DIR / "data" / "topics.txt"
 POSTS_DIR = DOCS_DIR / "_posts"
 
+# 특정 제품(예: 쿠팡파트너스 딥링크가 있는 제품)에 대해 한 번만 글을 쓰고
+# 싶을 때 쓰는 수동 오버라이드 파일. 있으면 이번 실행은 평소 큐(topics.txt)를
+# 건드리지 않고 이 파일 내용으로만 글을 쓴 뒤, 다 쓰고 나면 파일을 지워서
+# 다음 실행부터는 다시 평소 큐로 돌아간다. 필수 키:
+#   topic, product_name, product_info, affiliate_url, affiliate_label
+MANUAL_TOPIC_FILE = PROJECT_DIR / "data" / "manual_topic.json"
+
 MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5")
 MAX_RECENT_TITLES = 10
 
@@ -340,6 +347,26 @@ def select_topic() -> str:
     return topic
 
 
+def load_manual_topic() -> dict | None:
+    """MANUAL_TOPIC_FILE이 있으면 읽어서 돌려주고, 없거나 형식이 잘못됐으면
+    None을 돌려준다 (이 경우 평소처럼 select_topic() 큐를 그대로 쓴다)."""
+    if not MANUAL_TOPIC_FILE.exists():
+        return None
+
+    try:
+        data = json.loads(MANUAL_TOPIC_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"수동 주제 파일을 읽지 못해 건너뜁니다: {e}")
+        return None
+
+    required = ("topic", "product_name", "product_info", "affiliate_url", "affiliate_label")
+    if not all(data.get(k) for k in required):
+        print(f"수동 주제 파일에 필수 항목({', '.join(required)})이 빠져 있어 건너뜁니다.")
+        return None
+
+    return data
+
+
 def get_recent_titles(limit: int = MAX_RECENT_TITLES) -> list[str]:
     if not POSTS_DIR.exists():
         return []
@@ -389,6 +416,40 @@ IMAGE_QUERY: (이 글에 어울리는 사진을 찾기 위한 영어 검색어 2
 ---
 (본문 마크다운. 1200~1800자 분량. 소제목(##) 2~4개.
 실용적인 정보 위주로 쓰고, 확인되지 않은 사실이나 과장된 효능/수익 약속은 절대 쓰지 마.
+말투는 자연스러운 존댓말 블로그 톤으로.)
+"""
+
+
+def build_product_prompt(manual: dict, recent_titles: list[str]) -> str:
+    """load_manual_topic()으로 받은 특정 제품 정보를 바탕으로 글을 쓰게 하는
+    프롬프트. build_prompt()와 형식(TITLE/TAGS/IMAGE_QUERY/본문)은 같지만,
+    KEYWORD 대신 이미 정해진 제휴 링크를 쓰므로 KEYWORD는 요구하지 않고,
+    실제 제품 사실(product_info)만 근거로 쓰고 그 외 숫자는 지어내지
+    말라고 명시한다."""
+    avoid_block = ""
+    if recent_titles:
+        recent_list = "\n".join(f"- {t}" for t in recent_titles)
+        avoid_block = f"\n최근에 이미 다룬 제목들이니 내용/각도가 겹치지 않게 새로운 관점으로 써줘:\n{recent_list}\n"
+
+    return f"""오늘의 주제: {manual['topic']}
+{avoid_block}
+이 글에서는 아래 실제 제품을 자연스럽게 소개하거나 추천해야 해:
+
+제품명: {manual['product_name']}
+제품 정보(사실 그대로, 지어내지 말 것): {manual['product_info']}
+
+아래 형식을 정확히 지켜서 한국어 블로그 글을 작성해줘.
+
+TITLE: (SEO에 좋은 구체적인 제목, 30자 내외, 과장/낚시성 문구 금지)
+TAGS: (쉼표로 구분된 태그 3~5개)
+IMAGE_QUERY: (이 글에 어울리는 사진을 찾기 위한 영어 검색어 2~4단어,
+  구체적인 장면 위주로. 예: "puppy training pad", "dog owner home")
+---
+(본문 마크다운. 1200~1800자 분량. 소제목(##) 2~4개.
+먼저 이 주제를 고를 때 일반적으로 확인해야 할 기준을 실용적으로 설명하고,
+자연스러운 흐름 속에서 위 제품 정보를 근거로 위 제품을 구체적으로 소개/추천해줘.
+위에 안 나온 가격·리뷰수·사양 등 숫자는 절대 새로 지어내지 말고, 주어진
+제품 정보 항목만 사실로 써. 과장된 효능이나 확정적인 수익 약속은 절대 쓰지 마.
 말투는 자연스러운 존댓말 블로그 톤으로.)
 """
 
@@ -537,6 +598,17 @@ def build_finance_sources_block(topic: str, tags: str) -> str:
     return "\n".join(lines)
 
 
+def build_manual_affiliate_block(affiliate_url: str, affiliate_label: str) -> str:
+    """load_manual_topic()으로 받은, 이미 정해진 실제 쿠팡파트너스 링크를
+    그대로 쓴다 (build_affiliate_block()과 달리 검색 링크로 대체하지 않음)."""
+    return (
+        "\n\n---\n\n"
+        f"🔗 관련 상품 보러가기: [{affiliate_label}]({affiliate_url})\n\n"
+        "*(쿠팡파트너스 활동의 일환으로, 위 링크를 통해 상품을 구매하실 경우 "
+        "일정액의 수수료를 제공받을 수 있습니다.)*\n"
+    )
+
+
 def find_stock_photo(query: str) -> dict | None:
     """Unsplash에서 query에 맞는 무료 사진 1장을 찾아 정보를 돌려준다.
     설정이 없거나 실패하면 None을 돌려주고, 절대 sys.exit 하지 않는다
@@ -674,10 +746,16 @@ def main() -> None:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
 
-    topic = select_topic()
+    manual = load_manual_topic()
     recent_titles = get_recent_titles()
 
-    prompt = build_prompt(topic, recent_titles)
+    if manual:
+        topic = manual["topic"]
+        prompt = build_product_prompt(manual, recent_titles)
+    else:
+        topic = select_topic()
+        prompt = build_prompt(topic, recent_titles)
+
     raw_output = call_claude(prompt)
     title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=topic)
 
@@ -703,16 +781,26 @@ def main() -> None:
         "---\n"
     )
 
-    # 보험/금융/렌탈 글에는 관련 없는 쇼핑 검색 링크(쿠팡)를 억지로 붙이지 않는다 —
-    # 진지한 금융 정보 바로 아래에 뜬금없는 상품 검색 링크가 붙으면 신뢰도만 떨어진다.
-    finance_related = _is_finance_related(topic, tags)
-    affiliate_block = "" if finance_related else build_affiliate_block(keyword)
-    finance_block = build_finance_sources_block(topic, tags)
+    if manual:
+        # 특정 제품(쿠팡파트너스 링크) 지정 발행: 이미 정해진 실제 링크를 그대로 쓰고,
+        # 금융 콘텐츠용 출처 블록은 해당되지 않으므로 붙이지 않는다.
+        affiliate_block = build_manual_affiliate_block(manual["affiliate_url"], manual["affiliate_label"])
+        finance_block = ""
+    else:
+        # 보험/금융/렌탈 글에는 관련 없는 쇼핑 검색 링크(쿠팡)를 억지로 붙이지 않는다 —
+        # 진지한 금융 정보 바로 아래에 뜬금없는 상품 검색 링크가 붙으면 신뢰도만 떨어진다.
+        finance_related = _is_finance_related(topic, tags)
+        affiliate_block = "" if finance_related else build_affiliate_block(keyword)
+        finance_block = build_finance_sources_block(topic, tags)
     post_path.write_text(front_matter + "\n" + body + affiliate_block + finance_block, encoding="utf-8")
 
     print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
 
     post_to_blogger(safe_title, body + affiliate_block + finance_block)
+
+    if manual:
+        MANUAL_TOPIC_FILE.unlink(missing_ok=True)
+        print("수동 주제 파일을 사용 완료하여 삭제했습니다 (다음 실행부터는 평소 큐로 돌아갑니다).")
 
 
 if __name__ == "__main__":
