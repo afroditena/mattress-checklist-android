@@ -53,8 +53,17 @@ POSTS_DIR = DOCS_DIR / "_posts"
 # 싶을 때 쓰는 수동 오버라이드 파일. 있으면 이번 실행은 평소 큐(topics.txt)를
 # 건드리지 않고 이 파일 내용으로만 글을 쓴 뒤, 다 쓰고 나면 파일을 지워서
 # 다음 실행부터는 다시 평소 큐로 돌아간다. 필수 키:
-#   topic, product_name, product_info, affiliate_url, affiliate_label
+#   topic, product_name, product_info
+# 그리고 아래 둘 중 하나:
+#   - affiliate_url, affiliate_label (마크다운 링크로 삽입)
+#   - affiliate_html, disclosure_text (주어진 배너 HTML과 고지문을 그대로 삽입)
 MANUAL_TOPIC_FILE = PROJECT_DIR / "data" / "manual_topic.json"
+
+# 여러 제품을 하루에 하나씩(매일 자동 실행되는 스케줄에 맞춰) 순서대로 발행하고
+# 싶을 때 쓰는 큐 파일. 위와 같은 키를 갖는 항목들의 JSON 배열이며, 실행할
+# 때마다 맨 앞의 항목 하나만 꺼내 쓰고 나머지는 그대로 남겨둔다(다 쓰면 파일을
+# 지운다). MANUAL_TOPIC_FILE(단건)보다 우선한다.
+MANUAL_TOPIC_QUEUE_FILE = PROJECT_DIR / "data" / "manual_topic_queue.json"
 
 MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5")
 MAX_RECENT_TITLES = 10
@@ -344,24 +353,91 @@ def select_topic() -> str:
     return topic
 
 
+def _validate_manual_item(data: dict) -> bool:
+    base_required = ("topic", "product_name", "product_info")
+    if not all(data.get(k) for k in base_required):
+        print(f"수동 주제 항목에 필수 항목({', '.join(base_required)})이 빠져 있어 건너뜁니다.")
+        return False
+
+    has_markdown_link = data.get("affiliate_url") and data.get("affiliate_label")
+    has_raw_html = data.get("affiliate_html") and data.get("disclosure_text")
+    if not (has_markdown_link or has_raw_html):
+        print(
+            "수동 주제 항목에 제휴 정보가 없어 건너뜁니다 "
+            "(affiliate_url+affiliate_label 또는 affiliate_html+disclosure_text 필요)."
+        )
+        return False
+
+    return True
+
+
 def load_manual_topic() -> dict | None:
-    """MANUAL_TOPIC_FILE이 있으면 읽어서 돌려주고, 없거나 형식이 잘못됐으면
-    None을 돌려준다 (이 경우 평소처럼 select_topic() 큐를 그대로 쓴다)."""
-    if not MANUAL_TOPIC_FILE.exists():
-        return None
+    """다음 순서로 이번 실행에 쓸 "수동 지정" 제품 정보를 찾아 돌려준다:
 
-    try:
-        data = json.loads(MANUAL_TOPIC_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"수동 주제 파일을 읽지 못해 건너뜁니다: {e}")
-        return None
+    1. MANUAL_TOPIC_QUEUE_FILE (여러 제품을 하루에 하나씩 순서대로 발행하는 큐) —
+       맨 앞 항목 하나를 꺼내 쓰고, 나머지는 그대로 파일에 남겨둔다(다 쓰면 파일 삭제).
+    2. MANUAL_TOPIC_FILE (단건 오버라이드) — 이번 실행에 한 번만 쓰고 파일을 지운다.
 
-    required = ("topic", "product_name", "product_info", "affiliate_url", "affiliate_label")
-    if not all(data.get(k) for k in required):
-        print(f"수동 주제 파일에 필수 항목({', '.join(required)})이 빠져 있어 건너뜁니다.")
-        return None
+    둘 다 없거나 형식이 잘못됐으면 None을 돌려준다 (이 경우 평소처럼
+    select_topic() 큐를 그대로 쓴다). 실제 삭제/재기록은 main()에서
+    발행이 끝난 뒤에 한다(consume_manual_topic 참고) — 여기서는 읽기만 한다.
+    """
+    if MANUAL_TOPIC_QUEUE_FILE.exists():
+        try:
+            items = json.loads(MANUAL_TOPIC_QUEUE_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"수동 주제 큐 파일을 읽지 못해 건너뜁니다: {e}")
+            items = None
 
-    return data
+        if isinstance(items, list):
+            while items:
+                candidate = items[0]
+                if isinstance(candidate, dict) and _validate_manual_item(candidate):
+                    candidate = dict(candidate)
+                    candidate["_source"] = "queue"
+                    return candidate
+                print("수동 주제 큐의 맨 앞 항목이 잘못돼 건너뛰고 다음 항목을 시도합니다.")
+                items = items[1:]
+            # 큐가 비어 있거나(원래부터, 혹은 잘못된 항목을 다 걸러내서) 남은 게 없음
+        elif items is not None:
+            print("수동 주제 큐 파일이 배열(JSON list) 형식이 아니어서 건너뜁니다.")
+
+    if MANUAL_TOPIC_FILE.exists():
+        try:
+            data = json.loads(MANUAL_TOPIC_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"수동 주제 파일을 읽지 못해 건너뜁니다: {e}")
+            return None
+
+        if isinstance(data, dict) and _validate_manual_item(data):
+            data = dict(data)
+            data["_source"] = "single"
+            return data
+
+    return None
+
+
+def consume_manual_topic(manual: dict) -> None:
+    """load_manual_topic()이 돌려준 항목을 다 쓰고 난 뒤 호출한다. 큐에서
+    온 항목이면 맨 앞 하나만 제거하고 나머지(있다면)를 다시 저장하고,
+    단건 파일에서 온 항목이면 그 파일을 지운다."""
+    if manual.get("_source") == "queue":
+        try:
+            items = json.loads(MANUAL_TOPIC_QUEUE_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            items = []
+        remaining = items[1:] if isinstance(items, list) and items else []
+        if remaining:
+            MANUAL_TOPIC_QUEUE_FILE.write_text(
+                json.dumps(remaining, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+            print(f"수동 주제 큐에서 1건 사용, {len(remaining)}건 남음.")
+        else:
+            MANUAL_TOPIC_QUEUE_FILE.unlink(missing_ok=True)
+            print("수동 주제 큐를 모두 사용하여 삭제했습니다 (다음 실행부터는 평소 큐로 돌아갑니다).")
+    else:
+        MANUAL_TOPIC_FILE.unlink(missing_ok=True)
+        print("수동 주제 파일을 사용 완료하여 삭제했습니다 (다음 실행부터는 평소 큐로 돌아갑니다).")
 
 
 def get_recent_titles(limit: int = MAX_RECENT_TITLES) -> list[str]:
@@ -522,12 +598,19 @@ def build_affiliate_block(keyword: str) -> str:
     )
 
 
-def build_manual_affiliate_block(affiliate_url: str, affiliate_label: str) -> str:
-    """load_manual_topic()으로 받은, 이미 정해진 실제 쿠팡파트너스 링크를
-    그대로 쓴다 (build_affiliate_block()과 달리 검색 링크로 대체하지 않음)."""
+def build_manual_affiliate_block(manual: dict) -> str:
+    """load_manual_topic()으로 받은, 이미 정해진 실제 쿠팡파트너스 링크(또는 배너
+    HTML)를 그대로 쓴다 (build_affiliate_block()과 달리 검색 링크로 대체하지 않음).
+
+    manual에 affiliate_html/disclosure_text가 있으면 그 원문 그대로(HTML 배너 +
+    지정된 고지문)를 쓰고, 없으면 affiliate_url/affiliate_label로 마크다운 링크
+    형태를 만든다."""
+    if manual.get("affiliate_html") and manual.get("disclosure_text"):
+        return f"\n\n---\n\n{manual['affiliate_html']}\n\n{manual['disclosure_text']}\n"
+
     return (
         "\n\n---\n\n"
-        f"🔗 관련 상품 보러가기: [{affiliate_label}]({affiliate_url})\n\n"
+        f"🔗 관련 상품 보러가기: [{manual['affiliate_label']}]({manual['affiliate_url']})\n\n"
         "*(쿠팡파트너스 활동의 일환으로, 위 링크를 통해 상품을 구매하실 경우 "
         "일정액의 수수료를 제공받을 수 있습니다.)*\n"
     )
@@ -706,7 +789,7 @@ def main() -> None:
     )
 
     if manual:
-        affiliate_block = build_manual_affiliate_block(manual["affiliate_url"], manual["affiliate_label"])
+        affiliate_block = build_manual_affiliate_block(manual)
     else:
         affiliate_block = build_affiliate_block(keyword)
     post_path.write_text(front_matter + "\n" + body + affiliate_block, encoding="utf-8")
@@ -716,8 +799,7 @@ def main() -> None:
     post_to_blogger(safe_title, body + affiliate_block)
 
     if manual:
-        MANUAL_TOPIC_FILE.unlink(missing_ok=True)
-        print("수동 주제 파일을 사용 완료하여 삭제했습니다 (다음 실행부터는 평소 큐로 돌아갑니다).")
+        consume_manual_topic(manual)
 
 
 if __name__ == "__main__":

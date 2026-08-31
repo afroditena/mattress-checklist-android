@@ -50,7 +50,7 @@ jobs:
         run: |
           git config user.name "auto-blog-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add docs/_posts auto-blog-autopilot/data/topics.txt auto-blog-autopilot/data/manual_topic.json
+          git add docs/_posts auto-blog-autopilot/data/topics.txt auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json
           if git diff --cached --quiet; then
             echo "변경 사항 없음 - 커밋 건너뜀"
           else
