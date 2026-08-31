@@ -50,7 +50,18 @@ jobs:
         run: |
           git config user.name "auto-blog-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add docs/_posts auto-blog-autopilot/data/topics.txt auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json
+          git add docs/_posts auto-blog-autopilot/data/topics.txt
+          # manual_topic.json / manual_topic_queue.json은 존재할 때만 있는 선택적
+          # 파일이라, 이미 소비되어 없어진(그리고 그 삭제가 예전에 커밋된) 상태에서
+          # 그대로 "git add"하면 "pathspec did not match any files"로 실패한다
+          # (실제로 이 버그 때문에 발행은 성공했는데 커밋/푸시가 통째로 실패한 적이
+          # 있었다). 지금 워킹트리에 있거나(정상 케이스), 이번 커밋 기준으로
+          # 추적되고 있을 때만(이번에 막 지워진 케이스) add 한다.
+          for f in auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json; do
+            if [ -e "$f" ] || git cat-file -e "HEAD:$f" 2>/dev/null; then
+              git add "$f"
+            fi
+          done
           if git diff --cached --quiet; then
             echo "변경 사항 없음 - 커밋 건너뜀"
           else
