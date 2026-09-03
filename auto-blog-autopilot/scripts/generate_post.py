@@ -677,6 +677,33 @@ def build_image_block(photo: dict | None) -> str:
     )
 
 
+def extract_product_image(affiliate_html: str) -> dict | None:
+    """제품 지정 발행(manual)의 affiliate_html(쿠팡 배너 <img> 태그)에서 실제
+    상품 이미지 URL과 alt 텍스트를 뽑아낸다. 상관없는 Unsplash 스톡사진 대신
+    이 이미지를 글 대표 이미지로 쓰기 위함 — 실제 그 상품 사진이라 훨씬
+    정확하다. 배너에 img 태그가 없거나 파싱에 실패하면 None을 돌려주고,
+    호출부는 이 경우 이미지 없이 계속 진행한다(예외를 일으키지 않음)."""
+    if not affiliate_html:
+        return None
+
+    src_match = re.search(r'<img[^>]*\bsrc="([^"]+)"', affiliate_html)
+    if not src_match:
+        return None
+
+    alt_match = re.search(r'<img[^>]*\balt="([^"]*)"', affiliate_html)
+    return {"url": src_match.group(1), "alt": alt_match.group(1) if alt_match else ""}
+
+
+def build_product_image_block(photo: dict | None) -> str:
+    """extract_product_image()로 뽑은 실제 상품 이미지를 글 맨 위에 넣는다.
+    Unsplash 사진작가 출처 표기 대신, 이미지 출처가 쿠팡임을 짧게 밝힌다."""
+    if not photo or not photo.get("url"):
+        return ""
+
+    alt = photo["alt"] or "제품 이미지"
+    return f"![{alt}]({photo['url']})\n*제품 이미지 출처: 쿠팡*\n\n"
+
+
 def blogger_configured() -> bool:
     return all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, BLOGGER_BLOG_ID])
 
@@ -766,8 +793,14 @@ def main() -> None:
     raw_output = call_claude(prompt)
     title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=topic)
 
-    photo = find_stock_photo(image_query or keyword or topic)
-    image_block = build_image_block(photo)
+    if manual and manual.get("affiliate_html"):
+        # 제품 지정 발행: 무관한 Unsplash 스톡사진 대신, 이미 갖고 있는
+        # 실제 상품 이미지(쿠팡 배너)를 대표 이미지로 쓴다.
+        product_photo = extract_product_image(manual["affiliate_html"])
+        image_block = build_product_image_block(product_photo)
+    else:
+        photo = find_stock_photo(image_query or keyword or topic)
+        image_block = build_image_block(photo)
     body = image_block + body
 
     today = datetime.date.today()
