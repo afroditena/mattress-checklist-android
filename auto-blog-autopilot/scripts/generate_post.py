@@ -776,6 +776,114 @@ def post_to_blogger(title: str, body_markdown: str) -> None:
         print(f"Blogger 발행 실패, 이번 회차는 건너뜁니다: {e}")
 
 
+BLOGGER_PRIVACY_PAGE_TITLE = "개인정보처리방침"
+BLOGGER_ABOUT_PAGE_TITLE = "소개"
+
+BLOGGER_PRIVACY_PAGE_MD = """\
+이 페이지는 이 블로그를 방문하시는 분들에게 어떤 정보가 수집되고 어떻게 쓰이는지 설명합니다.
+
+## 1. 쿠키 및 방문 기록
+
+이 블로그는 방문 통계 분석을 위해 Google Analytics를 사용할 수 있습니다. Google Analytics는 쿠키를 이용해 방문 페이지, 체류 시간, 접속 기기 등 비식별 통계 정보를 수집합니다. 개인을 특정할 수 있는 정보(이름, 연락처 등)는 수집하지 않습니다.
+
+## 2. 광고 게재
+
+이 블로그에는 Google AdSense를 비롯한 제3자 광고가 게재될 수 있습니다. Google 등 광고 게재업체는 이용자의 이전 방문 기록을 바탕으로 맞춤 광고를 보여주기 위해 쿠키를 사용할 수 있습니다.
+
+- Google이 광고에 쿠키를 사용하는 방식은 [Google 광고 정책](https://policies.google.com/technologies/ads)에서 확인하실 수 있습니다.
+- 맞춤 광고를 원치 않으시면 [Google 광고 설정](https://adssettings.google.com)에서 개인 맞춤 광고를 비활성화할 수 있습니다.
+
+## 3. 제휴 마케팅(어필리에이트) 고지
+
+이 블로그의 일부 게시글에는 쿠팡 파트너스 활동을 통한 제휴 링크가 포함되어 있으며, 이런 링크를 통해 상품을 구매하시면 이 블로그 운영자가 일정액의 수수료를 제공받을 수 있습니다. 해당 사실은 관련 게시글 본문에도 별도로 고지하고 있습니다.
+
+## 4. 콘텐츠 제작 방식
+
+이 블로그의 글은 자동화된 콘텐츠 파이프라인을 통해 작성·발행됩니다. 주제 선정과 제품 정보는 운영자가 관리하며, 정보의 정확성을 위해 지속적으로 점검하고 있습니다.
+
+## 5. 문의
+
+이 개인정보처리방침이나 블로그 운영과 관련해 문의하실 내용이 있으면 게시글 댓글을 통해 남겨 주세요.
+
+## 6. 개정
+
+이 방침은 서비스 내용 변경이나 관련 법령 개정에 따라 변경될 수 있으며, 변경 시 이 페이지에 반영합니다.
+"""
+
+BLOGGER_ABOUT_PAGE_MD_TEMPLATE = """\
+## 이 블로그는
+
+1인 가구와 반려동물을 키우는 분들이 반복해서 사야 하는 생활 소모품 — 생수, 화장지, 사료, 모래, 간편식 같은 것들 — 을 어떻게 고르고 어떤 주기로 구매하면 좋은지 정리합니다. 재구매 주기, 보관 방법, 성분표 읽는 법처럼 실제로 사고 쓰면서 부딪히는 질문들을 다룹니다.
+
+## 운영 방식
+
+이 블로그는 콘텐츠 자동화 파이프라인을 통해 매일 새 글을 발행합니다. 다룰 주제와 소개하는 제품 정보는 운영자가 선정·확인하며, 게시글 내용은 이 과정을 거쳐 작성됩니다.
+
+일부 게시글에는 쿠팡 파트너스 제휴 링크가 포함되어 있고, 이를 통한 구매가 이루어지면 운영자가 일정액의 수수료를 받을 수 있습니다. 해당 사실은 관련 게시글마다 명시하고 있습니다. 자세한 내용은 [개인정보처리방침]({privacy_url}) 페이지를 참고해 주세요.
+
+## 연락
+
+블로그 내용에 대한 의견이나 문의는 게시글 댓글로 남겨 주시면 확인합니다.
+"""
+
+
+def sync_blogger_static_pages() -> None:
+    """개인정보처리방침·소개 페이지가 Blogger에 아직 없으면 만들어 둔다.
+    제목 기준으로 이미 있으면 아무것도 하지 않으므로, 매일 실행돼도 안전하다
+    (idempotent). 애드센스는 실제로 신청하는 도메인(Blogger)에 이 페이지들이
+    있어야 심사가 되므로, GitHub Pages(docs/privacy.md, docs/about.md)와
+    같은 내용을 Blogger 쪽에도 맞춰 둔다. 실패해도 본 발행 흐름을 막지 않는다."""
+    if not blogger_configured():
+        return
+
+    try:
+        access_token = get_google_access_token()
+    except (urllib.error.URLError, urllib.error.HTTPError, KeyError, ValueError) as e:
+        print(f"Blogger 정적 페이지 동기화 건너뜀 (토큰 갱신 실패): {e}")
+        return
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    pages_url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/pages/"
+
+    try:
+        req = urllib.request.Request(pages_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            existing = json.loads(resp.read()).get("items", []) or []
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        print(f"Blogger 페이지 목록 조회 실패, 정적 페이지 동기화 건너뜀: {e}")
+        return
+
+    existing_by_title = {p.get("title", ""): p for p in existing}
+
+    def _create_page(title: str, body_markdown: str) -> str | None:
+        payload = json.dumps({"title": title, "content": markdown_to_html(body_markdown)}).encode("utf-8")
+        req = urllib.request.Request(pages_url, data=payload, method="POST", headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read())
+            url = result.get("url")
+            print(f"Blogger {title} 페이지 생성 완료: {url}")
+            return url
+        except urllib.error.HTTPError as e:
+            print(f"Blogger {title} 페이지 생성 실패: {e.code} {e.reason}: {e.read().decode('utf-8', 'replace')}")
+        except urllib.error.URLError as e:
+            print(f"Blogger {title} 페이지 생성 실패: {e}")
+        return None
+
+    privacy_url = existing_by_title.get(BLOGGER_PRIVACY_PAGE_TITLE, {}).get("url")
+    if BLOGGER_PRIVACY_PAGE_TITLE not in existing_by_title:
+        privacy_url = _create_page(BLOGGER_PRIVACY_PAGE_TITLE, BLOGGER_PRIVACY_PAGE_MD)
+
+    if BLOGGER_ABOUT_PAGE_TITLE not in existing_by_title:
+        about_md = BLOGGER_ABOUT_PAGE_MD_TEMPLATE.format(
+            privacy_url=privacy_url or "https://www.blogger.com"
+        )
+        _create_page(BLOGGER_ABOUT_PAGE_TITLE, about_md)
+
+
 def main() -> None:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
@@ -830,6 +938,7 @@ def main() -> None:
     print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
 
     post_to_blogger(safe_title, body + affiliate_block)
+    sync_blogger_static_pages()
 
     if manual:
         consume_manual_topic(manual)
