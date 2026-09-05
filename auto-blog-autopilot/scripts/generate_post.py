@@ -884,9 +884,93 @@ def sync_blogger_static_pages() -> None:
         _create_page(BLOGGER_ABOUT_PAGE_TITLE, about_md)
 
 
+def fix_known_post_title() -> None:
+    """일회성 유지보수: 2026-08-21 발행 글이 AI 응답 파싱 실패로 폴백 제목
+    ("자동 생성 포스트")을 그대로 달고 나간 버그를 GitHub Pages 파일과
+    Blogger 글 양쪽에서 바로잡는다. 내용 자체는 정상(여름철 반려동물
+    시간대별 관리 팁)이라 제목만 고치면 된다.
+
+    이미 고쳐져 있으면(해당 파일이 없으면) 조용히 넘어가므로 여러 번
+    실행해도 안전하다. RUN_FIX_KNOWN_POST_TITLE=true 환경변수로만
+    실행되는 일회성 경로라, 평소 매일 발행 흐름에는 전혀 영향이 없다."""
+    OLD_TITLE = "자동 생성 포스트"
+    NEW_TITLE = "여름철 반려동물 관리, 아침·낮·저녁 시간대별로 나눠서 확인하기"
+    OLD_SLUG_PREFIX = "2026-08-21"
+
+    old_path = None
+    for candidate in POSTS_DIR.glob(f"{OLD_SLUG_PREFIX}-*.md"):
+        if f'title: "{OLD_TITLE}"' in candidate.read_text(encoding="utf-8"):
+            old_path = candidate
+            break
+
+    if old_path is None:
+        print(f"'{OLD_TITLE}' 제목의 글을 찾지 못했습니다 (이미 고쳐졌거나 파일이 없음) - 건너뜁니다.")
+    else:
+        text = old_path.read_text(encoding="utf-8")
+        fixed = text.replace(f'title: "{OLD_TITLE}"', f'title: "{NEW_TITLE}"', 1)
+        new_path = POSTS_DIR / f"{OLD_SLUG_PREFIX}-{slugify(NEW_TITLE)}.md"
+        new_path.write_text(fixed, encoding="utf-8")
+        if new_path != old_path:
+            old_path.unlink()
+        print(f"GitHub Pages 파일 수정 완료: {old_path.name} -> {new_path.name}")
+
+    if not blogger_configured():
+        print("Blogger 인증 정보가 없어 Blogger 쪽 제목 수정은 건너뜁니다.")
+        return
+
+    try:
+        access_token = get_google_access_token()
+    except (urllib.error.URLError, urllib.error.HTTPError, KeyError, ValueError) as e:
+        print(f"Blogger 액세스 토큰 갱신 실패, Blogger 쪽 제목 수정을 건너뜁니다: {e}")
+        return
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+    search_url = (
+        f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/posts/search"
+        f"?q={urllib.parse.quote(OLD_TITLE)}"
+    )
+    try:
+        req = urllib.request.Request(search_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            found = json.loads(resp.read()).get("items", []) or []
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        print(f"Blogger 글 검색 실패, Blogger 쪽 제목 수정을 건너뜁니다: {e}")
+        return
+
+    matches = [p for p in found if p.get("title") == OLD_TITLE]
+    if not matches:
+        print(f"Blogger에서 '{OLD_TITLE}' 제목의 글을 찾지 못했습니다 - 건너뜁니다.")
+        return
+
+    for post in matches:
+        post_id = post["id"]
+        patch_url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/posts/{post_id}"
+        payload = json.dumps({"title": NEW_TITLE}).encode("utf-8")
+        req = urllib.request.Request(
+            patch_url,
+            data=payload,
+            method="PATCH",
+            headers={**headers, "Content-Type": "application/json; charset=utf-8"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read())
+            print(f"Blogger 글 제목 수정 완료: {result.get('url', post_id)}")
+        except urllib.error.HTTPError as e:
+            print(f"Blogger 글 제목 수정 실패: {e.code} {e.reason}: {e.read().decode('utf-8', 'replace')}")
+        except urllib.error.URLError as e:
+            print(f"Blogger 글 제목 수정 실패: {e}")
+
+
 def main() -> None:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
+
+    if os.environ.get("RUN_FIX_KNOWN_POST_TITLE") == "true":
+        # 일회성 유지보수 모드: 정상 발행 흐름을 타지 않고 이 작업만 하고 끝낸다
+        # (workflow_dispatch로만 켜지며, 매일 스케줄 실행에는 영향 없음).
+        fix_known_post_title()
+        return
 
     manual = load_manual_topic()
     recent_titles = get_recent_titles()

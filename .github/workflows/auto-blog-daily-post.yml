@@ -6,7 +6,15 @@ name: Auto Blog Daily Post
 on:
   schedule:
     - cron: "0 22 * * *" # 매일 UTC 22:00 = 한국시간(KST) 오전 7시
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      fix_known_post_title:
+        description: >-
+          true로 실행하면 평소 발행을 건너뛰고, 2026-08-21 글이 AI 폴백
+          제목("자동 생성 포스트")으로 잘못 나간 버그만 일회성으로 고침
+          (fix_known_post_title() 참고). 평소엔 항상 false로 두면 됨.
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -29,6 +37,7 @@ jobs:
       - name: Generate today's post
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RUN_FIX_KNOWN_POST_TITLE: ${{ github.event.inputs.fix_known_post_title || 'false' }}
           # 아래 4개는 구글 Blogger 동시 발행용 (선택, 미설정이면 자동으로 건너뜀)
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
@@ -64,6 +73,9 @@ jobs:
           done
           if git diff --cached --quiet; then
             echo "변경 사항 없음 - 커밋 건너뜀"
+          elif [ "${{ github.event.inputs.fix_known_post_title || 'false' }}" = "true" ]; then
+            git commit -m "chore: 일회성 유지보수 - 8/21 글 폴백 제목 수정 ($(date +%Y-%m-%d))"
+            git push
           else
             git commit -m "chore: 자동 블로그 포스트 발행 ($(date +%Y-%m-%d))"
             git push
