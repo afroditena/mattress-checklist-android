@@ -753,6 +753,33 @@ def build_image_block(photo: dict | None) -> str:
     )
 
 
+def extract_product_image(affiliate_html: str) -> dict | None:
+    """제품 지정 발행(manual)의 affiliate_html(쿠팡 배너 <img> 태그)에서 실제
+    상품 이미지 URL과 alt 텍스트를 뽑아낸다. 상관없는 Unsplash 스톡사진 대신
+    이 이미지를 글 대표 이미지로 쓰기 위함 — 실제 그 상품 사진이라 훨씬
+    정확하다. 배너에 img 태그가 없거나 파싱에 실패하면 None을 돌려주고,
+    호출부는 이 경우 이미지 없이 계속 진행한다(예외를 일으키지 않음)."""
+    if not affiliate_html:
+        return None
+
+    src_match = re.search(r'<img[^>]*\bsrc="([^"]+)"', affiliate_html)
+    if not src_match:
+        return None
+
+    alt_match = re.search(r'<img[^>]*\balt="([^"]*)"', affiliate_html)
+    return {"url": src_match.group(1), "alt": alt_match.group(1) if alt_match else ""}
+
+
+def build_product_image_block(photo: dict | None) -> str:
+    """extract_product_image()로 뽑은 실제 상품 이미지를 글 맨 위에 넣는다.
+    Unsplash 사진작가 출처 표기 대신, 이미지 출처가 쿠팡임을 짧게 밝힌다."""
+    if not photo or not photo.get("url"):
+        return ""
+
+    alt = photo["alt"] or "제품 이미지"
+    return f"![{alt}]({photo['url']})\n*제품 이미지 출처: 쿠팡*\n\n"
+
+
 def blogger_configured() -> bool:
     return all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, BLOGGER_BLOG_ID])
 
@@ -825,9 +852,211 @@ def post_to_blogger(title: str, body_markdown: str) -> None:
         print(f"Blogger 발행 실패, 이번 회차는 건너뜁니다: {e}")
 
 
+BLOGGER_PRIVACY_PAGE_TITLE = "개인정보처리방침"
+BLOGGER_ABOUT_PAGE_TITLE = "소개"
+
+BLOGGER_PRIVACY_PAGE_MD = """\
+이 페이지는 이 블로그를 방문하시는 분들에게 어떤 정보가 수집되고 어떻게 쓰이는지 설명합니다.
+
+## 1. 쿠키 및 방문 기록
+
+이 블로그는 방문 통계 분석을 위해 Google Analytics를 사용할 수 있습니다. Google Analytics는 쿠키를 이용해 방문 페이지, 체류 시간, 접속 기기 등 비식별 통계 정보를 수집합니다. 개인을 특정할 수 있는 정보(이름, 연락처 등)는 수집하지 않습니다.
+
+## 2. 광고 게재
+
+이 블로그에는 Google AdSense를 비롯한 제3자 광고가 게재될 수 있습니다. Google 등 광고 게재업체는 이용자의 이전 방문 기록을 바탕으로 맞춤 광고를 보여주기 위해 쿠키를 사용할 수 있습니다.
+
+- Google이 광고에 쿠키를 사용하는 방식은 [Google 광고 정책](https://policies.google.com/technologies/ads)에서 확인하실 수 있습니다.
+- 맞춤 광고를 원치 않으시면 [Google 광고 설정](https://adssettings.google.com)에서 개인 맞춤 광고를 비활성화할 수 있습니다.
+
+## 3. 제휴 마케팅(어필리에이트) 고지
+
+이 블로그의 일부 게시글에는 쿠팡 파트너스 활동을 통한 제휴 링크가 포함되어 있으며, 이런 링크를 통해 상품을 구매하시면 이 블로그 운영자가 일정액의 수수료를 제공받을 수 있습니다. 해당 사실은 관련 게시글 본문에도 별도로 고지하고 있습니다.
+
+## 4. 콘텐츠 제작 방식
+
+이 블로그의 글은 자동화된 콘텐츠 파이프라인을 통해 작성·발행됩니다. 주제 선정과 제품 정보는 운영자가 관리하며, 정보의 정확성을 위해 지속적으로 점검하고 있습니다.
+
+## 5. 문의
+
+이 개인정보처리방침이나 블로그 운영과 관련해 문의하실 내용이 있으면 게시글 댓글을 통해 남겨 주세요.
+
+## 6. 개정
+
+이 방침은 서비스 내용 변경이나 관련 법령 개정에 따라 변경될 수 있으며, 변경 시 이 페이지에 반영합니다.
+"""
+
+BLOGGER_ABOUT_PAGE_MD_TEMPLATE = """\
+## 이 블로그는
+
+1인 가구와 반려동물을 키우는 분들이 반복해서 사야 하는 생활 소모품 — 생수, 화장지, 사료, 모래, 간편식 같은 것들 — 을 어떻게 고르고 어떤 주기로 구매하면 좋은지 정리합니다. 재구매 주기, 보관 방법, 성분표 읽는 법처럼 실제로 사고 쓰면서 부딪히는 질문들을 다룹니다.
+
+## 운영 방식
+
+이 블로그는 콘텐츠 자동화 파이프라인을 통해 매일 새 글을 발행합니다. 다룰 주제와 소개하는 제품 정보는 운영자가 선정·확인하며, 게시글 내용은 이 과정을 거쳐 작성됩니다.
+
+일부 게시글에는 쿠팡 파트너스 제휴 링크가 포함되어 있고, 이를 통한 구매가 이루어지면 운영자가 일정액의 수수료를 받을 수 있습니다. 해당 사실은 관련 게시글마다 명시하고 있습니다. 자세한 내용은 [개인정보처리방침]({privacy_url}) 페이지를 참고해 주세요.
+
+## 연락
+
+블로그 내용에 대한 의견이나 문의는 게시글 댓글로 남겨 주시면 확인합니다.
+"""
+
+
+def sync_blogger_static_pages() -> None:
+    """개인정보처리방침·소개 페이지가 Blogger에 아직 없으면 만들어 둔다.
+    제목 기준으로 이미 있으면 아무것도 하지 않으므로, 매일 실행돼도 안전하다
+    (idempotent). 애드센스는 실제로 신청하는 도메인(Blogger)에 이 페이지들이
+    있어야 심사가 되므로, GitHub Pages(docs/privacy.md, docs/about.md)와
+    같은 내용을 Blogger 쪽에도 맞춰 둔다. 실패해도 본 발행 흐름을 막지 않는다."""
+    if not blogger_configured():
+        return
+
+    try:
+        access_token = get_google_access_token()
+    except (urllib.error.URLError, urllib.error.HTTPError, KeyError, ValueError) as e:
+        print(f"Blogger 정적 페이지 동기화 건너뜀 (토큰 갱신 실패): {e}")
+        return
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    pages_url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/pages/"
+
+    try:
+        req = urllib.request.Request(pages_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            existing = json.loads(resp.read()).get("items", []) or []
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        print(f"Blogger 페이지 목록 조회 실패, 정적 페이지 동기화 건너뜀: {e}")
+        return
+
+    existing_by_title = {p.get("title", ""): p for p in existing}
+
+    def _create_page(title: str, body_markdown: str) -> str | None:
+        payload = json.dumps({"title": title, "content": markdown_to_html(body_markdown)}).encode("utf-8")
+        req = urllib.request.Request(pages_url, data=payload, method="POST", headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read())
+            url = result.get("url")
+            print(f"Blogger {title} 페이지 생성 완료: {url}")
+            return url
+        except urllib.error.HTTPError as e:
+            print(f"Blogger {title} 페이지 생성 실패: {e.code} {e.reason}: {e.read().decode('utf-8', 'replace')}")
+        except urllib.error.URLError as e:
+            print(f"Blogger {title} 페이지 생성 실패: {e}")
+        return None
+
+    privacy_url = existing_by_title.get(BLOGGER_PRIVACY_PAGE_TITLE, {}).get("url")
+    if BLOGGER_PRIVACY_PAGE_TITLE not in existing_by_title:
+        privacy_url = _create_page(BLOGGER_PRIVACY_PAGE_TITLE, BLOGGER_PRIVACY_PAGE_MD)
+
+    if BLOGGER_ABOUT_PAGE_TITLE not in existing_by_title:
+        about_md = BLOGGER_ABOUT_PAGE_MD_TEMPLATE.format(
+            privacy_url=privacy_url or "https://www.blogger.com"
+        )
+        _create_page(BLOGGER_ABOUT_PAGE_TITLE, about_md)
+
+
+def fix_known_post_title() -> None:
+    """일회성 유지보수: 2026-08-21 발행 글이 AI 응답 파싱 실패로 폴백 제목
+    ("자동 생성 포스트")을 그대로 달고 나간 버그를 GitHub Pages 파일과
+    Blogger 글 양쪽에서 바로잡는다. 내용 자체는 정상(여름철 반려동물
+    시간대별 관리 팁)이라 제목만 고치면 된다.
+
+    이미 고쳐져 있으면(해당 파일이 없으면) 조용히 넘어가므로 여러 번
+    실행해도 안전하다. RUN_FIX_KNOWN_POST_TITLE=true 환경변수로만
+    실행되는 일회성 경로라, 평소 매일 발행 흐름에는 전혀 영향이 없다."""
+    OLD_TITLE = "자동 생성 포스트"
+    NEW_TITLE = "여름철 반려동물 관리, 아침·낮·저녁 시간대별로 나눠서 확인하기"
+    OLD_SLUG_PREFIX = "2026-08-21"
+
+    old_path = None
+    for candidate in POSTS_DIR.glob(f"{OLD_SLUG_PREFIX}-*.md"):
+        if f'title: "{OLD_TITLE}"' in candidate.read_text(encoding="utf-8"):
+            old_path = candidate
+            break
+
+    if old_path is None:
+        print(f"'{OLD_TITLE}' 제목의 글을 찾지 못했습니다 (이미 고쳐졌거나 파일이 없음) - 건너뜁니다.")
+    else:
+        text = old_path.read_text(encoding="utf-8")
+        fixed = text.replace(f'title: "{OLD_TITLE}"', f'title: "{NEW_TITLE}"', 1)
+        new_path = POSTS_DIR / f"{OLD_SLUG_PREFIX}-{slugify(NEW_TITLE)}.md"
+        new_path.write_text(fixed, encoding="utf-8")
+        if new_path != old_path:
+            old_path.unlink()
+        print(f"GitHub Pages 파일 수정 완료: {old_path.name} -> {new_path.name}")
+
+    if not blogger_configured():
+        print("Blogger 인증 정보가 없어 Blogger 쪽 제목 수정은 건너뜁니다.")
+        return
+
+    try:
+        access_token = get_google_access_token()
+    except (urllib.error.URLError, urllib.error.HTTPError, KeyError, ValueError) as e:
+        print(f"Blogger 액세스 토큰 갱신 실패, Blogger 쪽 제목 수정을 건너뜁니다: {e}")
+        return
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+    # posts.search는 한글 제목을 토큰화해서 매칭하는 방식이라 정확한 문구를
+    # 못 찾는 경우가 있었다(실제로 이 글을 못 찾는 게 확인됨). 발행일을
+    # 정확히 알고 있으니, search 대신 그날 하루치 글 목록을 날짜로 걸러서
+    # 제목을 직접 비교하는 방식이 훨씬 안정적이다.
+    list_url = (
+        f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/posts/"
+        f"?startDate={urllib.parse.quote(f'{OLD_SLUG_PREFIX}T00:00:00+09:00')}"
+        f"&endDate={urllib.parse.quote(f'{OLD_SLUG_PREFIX}T23:59:59+09:00')}"
+        f"&fetchBodies=false&status=live"
+    )
+    try:
+        req = urllib.request.Request(list_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            found = json.loads(resp.read()).get("items", []) or []
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        print(f"Blogger 글 목록 조회 실패, Blogger 쪽 제목 수정을 건너뜁니다: {e}")
+        return
+
+    matches = [p for p in found if p.get("title") == OLD_TITLE]
+    if not matches:
+        titles_that_day = [p.get("title") for p in found]
+        print(
+            f"Blogger에서 '{OLD_TITLE}' 제목의 글을 찾지 못했습니다 - 건너뜁니다. "
+            f"({OLD_SLUG_PREFIX} 발행 글 목록: {titles_that_day})"
+        )
+        return
+
+    for post in matches:
+        post_id = post["id"]
+        patch_url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/posts/{post_id}"
+        payload = json.dumps({"title": NEW_TITLE}).encode("utf-8")
+        req = urllib.request.Request(
+            patch_url,
+            data=payload,
+            method="PATCH",
+            headers={**headers, "Content-Type": "application/json; charset=utf-8"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read())
+            print(f"Blogger 글 제목 수정 완료: {result.get('url', post_id)}")
+        except urllib.error.HTTPError as e:
+            print(f"Blogger 글 제목 수정 실패: {e.code} {e.reason}: {e.read().decode('utf-8', 'replace')}")
+        except urllib.error.URLError as e:
+            print(f"Blogger 글 제목 수정 실패: {e}")
+
+
 def main() -> None:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
+
+    if os.environ.get("RUN_FIX_KNOWN_POST_TITLE") == "true":
+        # 일회성 유지보수 모드: 정상 발행 흐름을 타지 않고 이 작업만 하고 끝낸다
+        # (workflow_dispatch로만 켜지며, 매일 스케줄 실행에는 영향 없음).
+        fix_known_post_title()
+        return
 
     manual = load_manual_topic()
     recent_titles = get_recent_titles()
@@ -842,8 +1071,14 @@ def main() -> None:
     raw_output = call_claude(prompt)
     title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=topic)
 
-    photo = find_stock_photo(image_query or keyword or topic)
-    image_block = build_image_block(photo)
+    if manual and manual.get("affiliate_html"):
+        # 제품 지정 발행: 무관한 Unsplash 스톡사진 대신, 이미 갖고 있는
+        # 실제 상품 이미지(쿠팡 배너)를 대표 이미지로 쓴다.
+        product_photo = extract_product_image(manual["affiliate_html"])
+        image_block = build_product_image_block(product_photo)
+    else:
+        photo = find_stock_photo(image_query or keyword or topic)
+        image_block = build_image_block(photo)
     body = image_block + body
 
     today = datetime.date.today()
@@ -880,6 +1115,7 @@ def main() -> None:
     print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
 
     post_to_blogger(safe_title, body + affiliate_block + finance_block)
+    sync_blogger_static_pages()
 
     if manual:
         consume_manual_topic(manual)
