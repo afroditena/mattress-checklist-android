@@ -925,21 +925,31 @@ def fix_known_post_title() -> None:
         return
 
     headers = {"Authorization": f"Bearer {access_token}"}
-    search_url = (
-        f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/posts/search"
-        f"?q={urllib.parse.quote(OLD_TITLE)}"
+    # posts.search는 한글 제목을 토큰화해서 매칭하는 방식이라 정확한 문구를
+    # 못 찾는 경우가 있었다(실제로 이 글을 못 찾는 게 확인됨). 발행일을
+    # 정확히 알고 있으니, search 대신 그날 하루치 글 목록을 날짜로 걸러서
+    # 제목을 직접 비교하는 방식이 훨씬 안정적이다.
+    list_url = (
+        f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/posts/"
+        f"?startDate={urllib.parse.quote(f'{OLD_SLUG_PREFIX}T00:00:00+09:00')}"
+        f"&endDate={urllib.parse.quote(f'{OLD_SLUG_PREFIX}T23:59:59+09:00')}"
+        f"&fetchBodies=false&status=live"
     )
     try:
-        req = urllib.request.Request(search_url, headers=headers)
+        req = urllib.request.Request(list_url, headers=headers)
         with urllib.request.urlopen(req, timeout=30) as resp:
             found = json.loads(resp.read()).get("items", []) or []
     except (urllib.error.URLError, urllib.error.HTTPError) as e:
-        print(f"Blogger 글 검색 실패, Blogger 쪽 제목 수정을 건너뜁니다: {e}")
+        print(f"Blogger 글 목록 조회 실패, Blogger 쪽 제목 수정을 건너뜁니다: {e}")
         return
 
     matches = [p for p in found if p.get("title") == OLD_TITLE]
     if not matches:
-        print(f"Blogger에서 '{OLD_TITLE}' 제목의 글을 찾지 못했습니다 - 건너뜁니다.")
+        titles_that_day = [p.get("title") for p in found]
+        print(
+            f"Blogger에서 '{OLD_TITLE}' 제목의 글을 찾지 못했습니다 - 건너뜁니다. "
+            f"({OLD_SLUG_PREFIX} 발행 글 목록: {titles_that_day})"
+        )
         return
 
     for post in matches:
