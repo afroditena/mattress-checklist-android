@@ -3,16 +3,19 @@
 매일 GitHub Actions에서 실행되어 블로그 글 1편을 자동 생성하는 스크립트.
 
 - data/topics.txt 에서 주제를 하나 꺼내 쓰고, 큐 맨 뒤로 돌려보낸다 (무한 로테이션).
+  이 큐로 발행되는 글은 전부 정보성 글이며, 쿠팡파트너스 등 어떤 제휴/수익화
+  링크도 붙이지 않는다. 실제 제품·제휴 링크가 필요한 날은 아래 manual_topic
+  (_queue) 오버라이드로 날짜·제품·링크를 직접 지정해서 발행한다.
 - 최근에 쓴 글 제목들을 함께 넘겨서 내용이 겹치지 않게 한다.
+- 정보성 글은 Claude의 web_search 도구를 켜서, 실제 검색 결과를 근거로
+  본문을 쓰게 한다 (모델의 사전 지식만으로 지어내지 않도록).
 - Claude API로 본문을 생성하고, docs/_posts/ 에 Jekyll 포스트 파일로 저장한다.
-- 쿠팡파트너스 관련 문구는 "검색 링크 + 고지문"까지만 자동 생성한다.
-  실제 수익화(트래킹되는 딥링크)로 바꾸려면 쿠팡파트너스 대시보드에서
-  해당 키워드로 딥링크를 만들어 주기적으로 교체해야 한다 (README 참고).
 - 구글 Blogger API 인증 정보(GOOGLE_CLIENT_ID 등)가 설정되어 있으면,
   같은 글을 Blogger에도 동시에 자동 발행한다 (설정 안 돼 있으면 조용히 건너뜀).
-- UNSPLASH_ACCESS_KEY가 설정되어 있으면, 글 내용에 맞는 무료 스톡 사진을
-  Unsplash에서 찾아 본문 맨 위에 넣는다 (출처 표기 포함, 설정 안 돼 있으면
-  조용히 건너뜀).
+- UNSPLASH_ACCESS_KEY가 설정되어 있으면, 정보성 글에는 최대 5장(맨 위 1장 +
+  소제목마다 1장)의 무료 스톡 사진을 Unsplash에서 찾아 본문에 흩어 넣는다
+  (출처 표기 포함, 설정 안 돼 있으면 조용히 건너뜀). 제품 지정 발행 글은
+  실제 상품 이미지 1장을 그대로 쓴다.
 - 주제를 고를 때 단순 순환(FIFO)만 하지 않고, 큐 맨 앞의 5개 후보를 놓고
   (1) Google 트렌드, (2) 네이버 데이터랩(검색어트렌드 공식 API)으로 최근
   검색량이 높은지, (3) GA4에 이 블로그의 과거 인기글과 겹치는 주제인지
@@ -480,19 +483,37 @@ def build_prompt(topic: str, recent_titles: list[str]) -> str:
             "자동으로 붙으니 본문에서 직접 링크를 만들 필요는 없어).\n"
         )
 
+    health_guard = ""
+    if _is_health_related(topic, ""):
+        health_guard = (
+            "\n이 주제는 건강/수면/영양제/질병처럼 의료광고 규제가 있는 분야야. "
+            "특정 질환을 진단하거나 '이렇게 하면 낫는다/치료된다' 같은 단정적 표현은 "
+            "쓰지 말고, 특정 영양제·의약품 브랜드를 추천하지 마. 일반적으로 알려진 "
+            "공공 보건 정보와 생활 습관 위주로 쓰고, 증상이 있거나 걱정되면 의사·약사와 "
+            "상담하라고 자연스럽게 안내해줘 (본문 끝에 별도로 출처 링크가 자동으로 "
+            "붙으니 본문에서 직접 링크를 만들 필요는 없어).\n"
+        )
+
+    web_search_guard = (
+        "\n먼저 web_search 도구로 이 주제에 대한 최신 정확한 정보를 1~2회 검색해서 "
+        "확인한 뒤에 써줘. 검색 과정이나 '검색해보겠습니다' 같은 설명은 최종 답변에 "
+        "쓰지 말고, 검색으로 확인한 사실만 자연스럽게 녹여서 바로 아래 형식으로만 "
+        "답해줘.\n"
+    )
+
     return f"""오늘의 주제: {topic}
-{avoid_block}{finance_guard}
+{avoid_block}{finance_guard}{health_guard}{web_search_guard}
 아래 형식을 정확히 지켜서 한국어 블로그 글을 작성해줘.
 
 TITLE: (SEO에 좋은 구체적인 제목, 30자 내외, 과장/낚시성 문구 금지)
 TAGS: (쉼표로 구분된 태그 3~5개)
-KEYWORD: (이 글과 자연스럽게 어울리는 쇼핑 검색 키워드 1개, 예: "캠핑 의자")
+KEYWORD: (이 글의 핵심 소재를 나타내는 키워드 1개, 예: "매트리스 관리")
 IMAGE_QUERY: (이 글에 어울리는 사진을 찾기 위한 영어 검색어 2~4단어,
-  구체적인 장면 위주로. 예: "cozy home office desk", "camping tent morning")
+  구체적인 장면 위주로. 예: "cozy bedroom morning", "clean bedding sunlight")
 ---
 (본문 마크다운. 1200~1800자 분량. 소제목(##) 2~4개.
-실용적인 정보 위주로 쓰고, 확인되지 않은 사실이나 과장된 효능/수익 약속은 절대 쓰지 마.
-말투는 자연스러운 존댓말 블로그 톤으로.)
+실용적인 정보 위주로 쓰고, 검색으로 확인되지 않은 사실이나 과장된 효능·수익 약속은
+절대 쓰지 마. 말투는 자연스러운 존댓말 블로그 톤으로.)
 """
 
 
@@ -530,21 +551,30 @@ IMAGE_QUERY: (이 글에 어울리는 사진을 찾기 위한 영어 검색어 2
 """
 
 
-def call_claude(prompt: str) -> str:
+def call_claude(prompt: str, enable_web_search: bool = False) -> str:
+    """enable_web_search=True면 Claude의 서버 실행형 web_search 도구를 켜서,
+    실제 검색 결과를 근거로 본문을 쓰게 한다 (건강/생활정보처럼 사실관계가
+    중요한 정보성 글에서, 모델의 사전 지식만으로 지어내지 않도록 하기 위함).
+    검색 도구가 쓰이면 응답 content에 텍스트 블록이 여러 개로 나뉠 수 있어서,
+    첫 블록만 쓰지 않고 전부 이어붙인다."""
     client = anthropic.Anthropic()
 
+    kwargs = dict(
+        model=MODEL,
+        max_tokens=6000 if enable_web_search else 4096,
+        output_config={"effort": "medium"},
+        system=(
+            "너는 한국어 생활정보 블로그의 자동 발행 시스템에서 콘텐츠를 작성하는 담당자다. "
+            "사실에 기반해서 쓰고, 과장 광고나 확정적인 효과·수익 약속은 절대 하지 않으며, "
+            "자연스러운 문체로 작성한다."
+        ),
+        messages=[{"role": "user", "content": prompt}],
+    )
+    if enable_web_search:
+        kwargs["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
+
     try:
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=4096,
-            output_config={"effort": "medium"},
-            system=(
-                "너는 한국어 생활정보 블로그의 자동 발행 시스템에서 콘텐츠를 작성하는 담당자다. "
-                "사실에 기반해서 쓰고, 과장 광고나 확정적인 효과·수익 약속은 절대 하지 않으며, "
-                "자연스러운 문체로 작성한다."
-            ),
-            messages=[{"role": "user", "content": prompt}],
-        )
+        response = client.messages.create(**kwargs)
     except anthropic.AuthenticationError:
         sys.exit("ANTHROPIC_API_KEY가 잘못되었거나 설정되지 않았습니다.")
     except anthropic.PermissionDeniedError:
@@ -562,11 +592,15 @@ def call_claude(prompt: str) -> str:
     if response.stop_reason == "refusal":
         sys.exit("Claude가 이 요청을 거절했습니다 (stop_reason=refusal). 주제를 확인해 주세요.")
 
-    for block in response.content:
-        if block.type == "text":
-            return block.text
+    text_parts = [block.text for block in response.content if block.type == "text"]
+    if not text_parts:
+        sys.exit("응답에 텍스트 콘텐츠가 없습니다.")
+    return "\n".join(text_parts)
 
-    sys.exit("응답에 텍스트 콘텐츠가 없습니다.")
+
+def _find_field_match(text: str, label: str) -> re.Match | None:
+    pattern = rf"^\s*[*_]{{0,2}}{re.escape(label)}[*_]{{0,2}}\s*[:：]\s*(.+?)\s*$"
+    return re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
 
 
 def _find_field(text: str, label: str) -> str:
@@ -576,8 +610,7 @@ def _find_field(text: str, label: str) -> str:
     콜론 앞에 공백을 넣거나, 전각 콜론 "："을 쓰는 등)에도 인식하도록
     관대하게 매칭한다. 못 찾으면 빈 문자열을 돌려준다.
     """
-    pattern = rf"^\s*[*_]{{0,2}}{re.escape(label)}[*_]{{0,2}}\s*[:：]\s*(.+?)\s*$"
-    match = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
+    match = _find_field_match(text, label)
     if not match:
         return ""
     value = match.group(1).strip()
@@ -591,7 +624,24 @@ def parse_output(text: str, fallback_title: str = "") -> tuple[str, str, str, st
     keyword = _find_field(text, "KEYWORD")
     image_query = _find_field(text, "IMAGE_QUERY")
 
-    body = text.split("---", 1)[-1].strip() if "---" in text else text.strip()
+    # 웹 검색 도구를 켜고 부른 경우, 실제 형식(TITLE/TAGS/...) 앞에 검색
+    # 과정에 대한 설명이 붙는 경우가 있다. 그냥 텍스트에서 처음 나오는
+    # "---"로 자르면, 그 설명 안에 우연히 "---"가 있을 때 본문이 엉뚱한
+    # 위치에서 잘릴 수 있다. 그래서 마지막으로 인식된 필드 줄 "이후"에서만
+    # 구분선을 찾는다.
+    anchor = 0
+    for label in ("IMAGE_QUERY", "KEYWORD", "TAGS", "TITLE"):
+        match = _find_field_match(text, label)
+        if match:
+            anchor = match.end()
+            break
+
+    separator = re.search(r"^[ \t]*-{3,}[ \t]*$", text[anchor:], re.MULTILINE)
+    if separator:
+        body = text[anchor + separator.end():].strip()
+    else:
+        body = text[anchor:].strip() if anchor else text.strip()
+
     return title, tags, keyword, image_query, body
 
 
@@ -674,6 +724,65 @@ def build_finance_sources_block(topic: str, tags: str) -> str:
     return "\n".join(lines)
 
 
+# 건강/수면/영양제/질병처럼 의료광고법·건강기능식품법이 걸리는 주제도 보험/금융과
+# 같은 이유로 조심해서 다룬다: 특정 질환의 진단·치료 효과를 단정하거나 특정
+# 영양제·의약품을 추천하면 안 되고(무자격 의료광고), 일반적인 정보와 병원/약사
+# 상담을 권하는 안내 위주로 써야 한다. 수수료가 붙는 링크가 아니라, 공신력 있는
+# 공공기관 출처만 안내한다.
+HEALTH_KEYWORDS = (
+    "건강", "질병", "질환", "증상", "영양제", "영양소", "비타민",
+    "수면", "불면", "코골이", "수면무호흡", "알레르기", "비염", "아토피",
+    "허리", "디스크", "관절", "통증", "면역",
+)
+
+HEALTH_DEFAULT_LINKS = [
+    ("질병관리청 국가건강정보포털", "https://health.kdca.go.kr"),
+]
+
+HEALTH_CATEGORY_LINKS = {
+    "영양제": [("식품안전나라 (식약처 건강기능식품 정보)", "https://www.foodsafetykorea.go.kr")],
+    "영양소": [("식품안전나라 (식약처 건강기능식품 정보)", "https://www.foodsafetykorea.go.kr")],
+    "비타민": [("식품안전나라 (식약처 건강기능식품 정보)", "https://www.foodsafetykorea.go.kr")],
+}
+
+
+def _is_health_related(topic: str, tags: str) -> bool:
+    haystack = f"{topic} {tags}"
+    return any(kw in haystack for kw in HEALTH_KEYWORDS)
+
+
+def build_health_sources_block(topic: str, tags: str) -> str:
+    """건강/수면/영양제/질병 등 주제일 때, 공신력 있는 공공기관 출처 링크를
+    본문 끝에 덧붙인다. build_finance_sources_block()과 같은 패턴 - 수수료
+    없는 순수 정보 제공 블록이며, 해당 주제가 아니면 빈 문자열을 돌려주고
+    절대 예외를 일으키지 않는다."""
+    if not _is_health_related(topic, tags):
+        return ""
+
+    haystack = f"{topic} {tags}"
+    links = list(HEALTH_DEFAULT_LINKS)
+    for kw, extra_links in HEALTH_CATEGORY_LINKS.items():
+        if kw in haystack:
+            links.extend(extra_links)
+
+    seen = set()
+    unique_links = []
+    for name, url in links:
+        if url not in seen:
+            seen.add(url)
+            unique_links.append((name, url))
+
+    lines = ["\n\n---\n", "**📌 더 정확한 정보가 필요하다면 아래 공식 출처를 확인하세요:**\n"]
+    for name, url in unique_links:
+        lines.append(f"- [{name}]({url})")
+    lines.append(
+        "\n*이 글은 일반적인 정보 제공을 목적으로 하며, 의학적 진단이나 치료를 "
+        "대신하지 않습니다. 증상이 있거나 영양제 복용을 고려 중이라면 의사·약사와 "
+        "상담하시기 바랍니다.*\n"
+    )
+    return "\n".join(lines)
+
+
 def build_manual_affiliate_block(manual: dict) -> str:
     """load_manual_topic()으로 받은, 이미 정해진 실제 쿠팡파트너스 링크(또는 배너
     HTML)를 그대로 쓴다 (build_affiliate_block()과 달리 검색 링크로 대체하지 않음).
@@ -692,14 +801,14 @@ def build_manual_affiliate_block(manual: dict) -> str:
     )
 
 
-def find_stock_photo(query: str) -> dict | None:
-    """Unsplash에서 query에 맞는 무료 사진 1장을 찾아 정보를 돌려준다.
-    설정이 없거나 실패하면 None을 돌려주고, 절대 sys.exit 하지 않는다
+def _search_unsplash_photos(query: str, count: int) -> list[dict]:
+    """Unsplash에서 query에 맞는 무료 사진을 최대 count장 찾아 정보를 돌려준다.
+    설정이 없거나 실패하면 빈 리스트를 돌려주고, 절대 sys.exit 하지 않는다
     (이미지는 있으면 좋은 부가 기능이지, 없다고 글 발행 자체를 막으면 안 된다)."""
     if not UNSPLASH_ACCESS_KEY or not query:
-        return None
+        return []
 
-    params = urllib.parse.urlencode({"query": query, "per_page": 1, "orientation": "landscape"})
+    params = urllib.parse.urlencode({"query": query, "per_page": count, "orientation": "landscape"})
     req = urllib.request.Request(
         f"https://api.unsplash.com/search/photos?{params}",
         headers={"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"},
@@ -709,33 +818,46 @@ def find_stock_photo(query: str) -> dict | None:
             payload = json.loads(resp.read())
     except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as e:
         print(f"Unsplash 사진 검색 실패, 이미지 없이 계속합니다: {e}")
-        return None
+        return []
 
-    results = payload.get("results") or []
+    results = (payload.get("results") or [])[:count]
     if not results:
         print(f"Unsplash에서 '{query}'에 맞는 사진을 못 찾았습니다, 이미지 없이 계속합니다.")
-        return None
+        return []
 
-    photo = results[0]
+    photos = []
+    for photo in results:
+        # Unsplash API 가이드라인상, 실제로 사진을 쓸 때는 download_location을
+        # 한 번 호출해줘야 한다 (사진작가 통계에 반영됨). 실패해도 무시한다.
+        download_location = (photo.get("links") or {}).get("download_location")
+        if download_location:
+            try:
+                ping = urllib.request.Request(
+                    download_location, headers={"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
+                )
+                urllib.request.urlopen(ping, timeout=10).close()
+            except (urllib.error.URLError, urllib.error.HTTPError):
+                pass
 
-    # Unsplash API 가이드라인상, 실제로 사진을 사용할 때는 download_location을
-    # 한 번 호출해줘야 한다 (사진작가 통계에 반영됨). 실패해도 무시한다.
-    download_location = (photo.get("links") or {}).get("download_location")
-    if download_location:
-        try:
-            ping = urllib.request.Request(
-                download_location, headers={"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
-            )
-            urllib.request.urlopen(ping, timeout=10).close()
-        except (urllib.error.URLError, urllib.error.HTTPError):
-            pass
+        photos.append(
+            {
+                "url": (photo.get("urls") or {}).get("regular", ""),
+                "alt": photo.get("alt_description") or query,
+                "photographer_name": (photo.get("user") or {}).get("name", "Unsplash"),
+                "photographer_url": (photo.get("user") or {}).get("links", {}).get("html", "https://unsplash.com"),
+            }
+        )
+    return [p for p in photos if p["url"]]
 
-    return {
-        "url": (photo.get("urls") or {}).get("regular", ""),
-        "alt": photo.get("alt_description") or query,
-        "photographer_name": (photo.get("user") or {}).get("name", "Unsplash"),
-        "photographer_url": (photo.get("user") or {}).get("links", {}).get("html", "https://unsplash.com"),
-    }
+
+def find_stock_photo(query: str) -> dict | None:
+    photos = _search_unsplash_photos(query, 1)
+    return photos[0] if photos else None
+
+
+def find_stock_photos(query: str, count: int = 5) -> list[dict]:
+    """정보성 글에 여러 장(기본 최대 5장)을 배치하기 위한 버전."""
+    return _search_unsplash_photos(query, count)
 
 
 def build_image_block(photo: dict | None) -> str:
@@ -751,6 +873,30 @@ def build_image_block(photo: dict | None) -> str:
         f"*Photo by [{photo['photographer_name']}]({photographer_link}) on "
         f"[Unsplash]({unsplash_link})*\n\n"
     )
+
+
+def distribute_images_into_body(body: str, photos: list[dict]) -> str:
+    """정보성 글 본문에 사진 여러 장(3~5장)을 흩어 배치한다: 첫 장은 글 맨 위,
+    나머지는 각 소제목(##) 바로 아래에 하나씩. 소제목보다 사진이 많으면 남는
+    사진은 버리고, 사진이 없으면 원래 본문을 그대로 돌려준다."""
+    if not photos:
+        return body
+
+    photo_iter = iter(photos)
+    top_photo = next(photo_iter, None)
+
+    lines = body.split("\n")
+    out = []
+    for line in lines:
+        out.append(line)
+        if line.startswith("## "):
+            next_photo = next(photo_iter, None)
+            if next_photo:
+                out.append("")
+                out.append(build_image_block(next_photo).rstrip("\n"))
+
+    result = "\n".join(out)
+    return (build_image_block(top_photo) if top_photo else "") + result
 
 
 def extract_product_image(affiliate_html: str) -> dict | None:
@@ -1068,7 +1214,9 @@ def main() -> None:
         topic = select_topic()
         prompt = build_prompt(topic, recent_titles)
 
-    raw_output = call_claude(prompt)
+    # 정보성 글(주제 큐 기반)만 web_search 도구를 켠다 - 제품 지정 발행은 이미
+    # 실제로 주어진 product_info만 근거로 쓰게 돼 있어서 검색이 필요 없다.
+    raw_output = call_claude(prompt, enable_web_search=not manual)
     title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=topic)
 
     if manual and manual.get("affiliate_html"):
@@ -1076,10 +1224,15 @@ def main() -> None:
         # 실제 상품 이미지(쿠팡 배너)를 대표 이미지로 쓴다.
         product_photo = extract_product_image(manual["affiliate_html"])
         image_block = build_product_image_block(product_photo)
-    else:
+        body = image_block + body
+    elif manual:
         photo = find_stock_photo(image_query or keyword or topic)
-        image_block = build_image_block(photo)
-    body = image_block + body
+        body = build_image_block(photo) + body
+    else:
+        # 정보성 글: 사진 3~5장(맨 위 1장 + 소제목마다 1장)을 흩어 배치해서
+        # 체류시간과 가독성을 높인다.
+        photos = find_stock_photos(image_query or keyword or topic, count=5)
+        body = distribute_images_into_body(body, photos)
 
     today = datetime.date.today()
     slug = slugify(title)
@@ -1100,21 +1253,24 @@ def main() -> None:
     )
 
     if manual:
-        # 특정 제품(쿠팡파트너스 링크) 지정 발행: 이미 정해진 실제 링크(또는 배너
-        # HTML)를 그대로 쓰고, 금융 콘텐츠용 출처 블록은 해당되지 않으므로 붙이지 않는다.
+        # 특정 제품(쿠팡파트너스 링크) 지정 발행: 사용자가 날짜·제품·링크를
+        # 직접 지정한 경우에만 실제 링크(또는 배너 HTML)를 그대로 쓴다.
         affiliate_block = build_manual_affiliate_block(manual)
         finance_block = ""
+        health_block = ""
     else:
-        # 보험/금융/렌탈 글에는 관련 없는 쇼핑 검색 링크(쿠팡)를 억지로 붙이지 않는다 —
-        # 진지한 금융 정보 바로 아래에 뜬금없는 상품 검색 링크가 붙으면 신뢰도만 떨어진다.
-        finance_related = _is_finance_related(topic, tags)
-        affiliate_block = "" if finance_related else build_affiliate_block(keyword)
+        # 정보성 글(주제 큐 기반 발행)에는 쿠팡 링크를 달지 않는다 - 실제
+        # 제휴 상품은 날짜/제품/링크를 지정한 manual_topic(_queue)로만 발행한다.
+        affiliate_block = ""
         finance_block = build_finance_sources_block(topic, tags)
-    post_path.write_text(front_matter + "\n" + body + affiliate_block + finance_block, encoding="utf-8")
+        health_block = build_health_sources_block(topic, tags)
+    post_path.write_text(
+        front_matter + "\n" + body + affiliate_block + finance_block + health_block, encoding="utf-8"
+    )
 
     print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
 
-    post_to_blogger(safe_title, body + affiliate_block + finance_block)
+    post_to_blogger(safe_title, body + affiliate_block + finance_block + health_block)
     sync_blogger_static_pages()
 
     if manual:
