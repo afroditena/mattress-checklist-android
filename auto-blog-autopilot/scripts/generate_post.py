@@ -777,8 +777,8 @@ def build_health_sources_block(topic: str, tags: str) -> str:
         lines.append(f"- [{name}]({url})")
     lines.append(
         "\n*이 글은 일반적인 정보 제공을 목적으로 하며, 의학적 진단이나 치료를 "
-        "대신하지 않습니다. 증상이 있거나 영양제 복용을 고려 중이라면 의사·약사와 "
-        "상담하시기 바랍니다.*\n"
+        "대신하지 않습니다. 증상이 있거나 건강이 걱정된다면 의사·약사 등 "
+        "전문가와 상담하시기 바랍니다.*\n"
     )
     return "\n".join(lines)
 
