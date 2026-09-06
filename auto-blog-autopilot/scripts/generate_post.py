@@ -169,8 +169,11 @@ def score_candidates_by_naver_datalab(candidates: list[str]) -> dict[str, float]
         resp = requests.post(
             "https://openapi.naver.com/v1/datalab/search",
             headers={
-                "X-Naver-Client-Id": NAVER_CLIENT_ID,
-                "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+                # 네이버 데이터랩 API는 NAVER Cloud Platform(NCP) API Gateway를
+                # 통해 제공되어, 예전 개발자센터 방식(X-Naver-Client-Id 등)이
+                # 아니라 NCP APIGW 전용 헤더 이름을 써야 한다.
+                "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
+                "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
                 "Content-Type": "application/json",
             },
             data=json.dumps(body),
@@ -466,8 +469,19 @@ def build_prompt(topic: str, recent_titles: list[str]) -> str:
         recent_list = "\n".join(f"- {t}" for t in recent_titles)
         avoid_block = f"\n최근에 이미 다룬 제목들이니 내용/각도가 겹치지 않게 새로운 관점으로 써줘:\n{recent_list}\n"
 
+    finance_guard = ""
+    if _is_finance_related(topic, ""):
+        finance_guard = (
+            "\n이 주제는 보험/금융/렌탈처럼 규제가 있는 분야야. 특정 보험료·금리·수수료 "
+            "숫자나 '최근 몇 %로 인상' 같은 시점이 걸린 사실을 단정적으로 쓰지 말고, "
+            "일반적인 원칙과 체크리스트, 확인해야 할 항목 위주로 써줘. 특정 보험사·금융사 "
+            "상품을 추천하거나 가입을 유도하는 표현은 쓰지 말고, 최신 정확한 조건은 "
+            "공식 출처에서 확인하라고 자연스럽게 안내해줘 (본문 끝에 별도로 출처 링크가 "
+            "자동으로 붙으니 본문에서 직접 링크를 만들 필요는 없어).\n"
+        )
+
     return f"""오늘의 주제: {topic}
-{avoid_block}
+{avoid_block}{finance_guard}
 아래 형식을 정확히 지켜서 한국어 블로그 글을 작성해줘.
 
 TITLE: (SEO에 좋은 구체적인 제목, 30자 내외, 과장/낚시성 문구 금지)
@@ -596,6 +610,68 @@ def build_affiliate_block(keyword: str) -> str:
         "*(쿠팡파트너스 활동의 일환으로, 위 링크를 통해 상품을 구매하실 경우 "
         "일정액의 수수료를 제공받을 수 있습니다.)*\n"
     )
+
+
+# 보험/금융/렌탈처럼 규제가 있는 주제는, 쿠팡처럼 아무 링크나 수익화 링크로
+# 바꿀 수 없다. 보험 상품 가입을 유도하며 수수료를 받는 행위는 보험업법상
+# 등록된 보험설계사·GA(법인보험대리점)만 할 수 있어서, 이 자동화가 임의로
+# 그런 링크를 만들지 않는다. 대신 실제 정보를 확인할 수 있는 공신력 있는
+# 공식 출처 링크만 안내한다 (수수료 없음, 순수 정보 제공 목적).
+#
+# 나중에 실제로 합법적인 제휴 채널(예: 대출비교 플랫폼의 블로거 파트너스
+# 프로그램 등)에 가입하게 되면, build_affiliate_block()과 같은 패턴으로
+# "이 링크로 이용 시 수수료를 받습니다" 안내문과 함께 실제 제휴 링크를
+# 이 블록에 추가하면 된다.
+FINANCE_KEYWORDS = (
+    "보험", "금융", "렌탈", "렌트", "대출", "카드", "금리", "이자",
+    "신용점수", "신용", "적금", "예금", "연금",
+)
+
+FINANCE_DEFAULT_LINKS = [
+    ("금융감독원 금융소비자정보포털 파인", "https://fine.fss.or.kr"),
+]
+
+FINANCE_CATEGORY_LINKS = {
+    "보험": [("보험다모아 (생명·손해보험협회 공동 보험료 비교공시)", "https://e-insmarket.or.kr")],
+    "렌탈": [("한국소비자원 (렌탈 계약·피해예방 정보)", "https://www.kca.go.kr")],
+    "렌트": [("한국소비자원 (렌탈 계약·피해예방 정보)", "https://www.kca.go.kr")],
+}
+
+
+def _is_finance_related(topic: str, tags: str) -> bool:
+    haystack = f"{topic} {tags}"
+    return any(kw in haystack for kw in FINANCE_KEYWORDS)
+
+
+def build_finance_sources_block(topic: str, tags: str) -> str:
+    """보험/금융/렌탈 등 주제일 때, 실제 정보를 상세히 확인할 수 있는
+    공식·공신력 있는 출처 링크를 본문 끝에 덧붙인다. 수수료 없는 순수
+    정보 제공 블록이다 (위 모듈 설명 참고). 해당 주제가 아니면 빈
+    문자열을 돌려주고, 절대 예외를 일으키지 않는다."""
+    if not _is_finance_related(topic, tags):
+        return ""
+
+    haystack = f"{topic} {tags}"
+    links = list(FINANCE_DEFAULT_LINKS)
+    for kw, extra_links in FINANCE_CATEGORY_LINKS.items():
+        if kw in haystack:
+            links.extend(extra_links)
+
+    seen = set()
+    unique_links = []
+    for name, url in links:
+        if url not in seen:
+            seen.add(url)
+            unique_links.append((name, url))
+
+    lines = ["\n\n---\n", "**📌 더 정확한 정보가 필요하다면 아래 공식 출처에서 확인하세요:**\n"]
+    for name, url in unique_links:
+        lines.append(f"- [{name}]({url})")
+    lines.append(
+        "\n*이 글은 정보 제공을 목적으로 하며, 실제 상품 가입 전 반드시 "
+        "위 공식 출처나 해당 상품 판매사를 통해 최신 조건을 확인하시기 바랍니다.*\n"
+    )
+    return "\n".join(lines)
 
 
 def build_manual_affiliate_block(manual: dict) -> str:
@@ -1024,14 +1100,21 @@ def main() -> None:
     )
 
     if manual:
+        # 특정 제품(쿠팡파트너스 링크) 지정 발행: 이미 정해진 실제 링크(또는 배너
+        # HTML)를 그대로 쓰고, 금융 콘텐츠용 출처 블록은 해당되지 않으므로 붙이지 않는다.
         affiliate_block = build_manual_affiliate_block(manual)
+        finance_block = ""
     else:
-        affiliate_block = build_affiliate_block(keyword)
-    post_path.write_text(front_matter + "\n" + body + affiliate_block, encoding="utf-8")
+        # 보험/금융/렌탈 글에는 관련 없는 쇼핑 검색 링크(쿠팡)를 억지로 붙이지 않는다 —
+        # 진지한 금융 정보 바로 아래에 뜬금없는 상품 검색 링크가 붙으면 신뢰도만 떨어진다.
+        finance_related = _is_finance_related(topic, tags)
+        affiliate_block = "" if finance_related else build_affiliate_block(keyword)
+        finance_block = build_finance_sources_block(topic, tags)
+    post_path.write_text(front_matter + "\n" + body + affiliate_block + finance_block, encoding="utf-8")
 
     print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
 
-    post_to_blogger(safe_title, body + affiliate_block)
+    post_to_blogger(safe_title, body + affiliate_block + finance_block)
     sync_blogger_static_pages()
 
     if manual:
