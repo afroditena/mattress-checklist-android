@@ -16,11 +16,12 @@
   소제목마다 1장)의 무료 스톡 사진을 Unsplash에서 찾아 본문에 흩어 넣는다
   (출처 표기 포함, 설정 안 돼 있으면 조용히 건너뜀). 제품 지정 발행 글은
   실제 상품 이미지 1장을 그대로 쓴다.
-- 주제를 고를 때 단순 순환(FIFO)만 하지 않고, 큐 맨 앞의 5개 후보를 놓고
+- 주제를 고를 때 단순 순환(FIFO)만 하지 않고, 큐 맨 앞의 10개 후보를 놓고
   (1) Google 트렌드, (2) 네이버 데이터랩(검색어트렌드 공식 API)으로 최근
   검색량이 높은지, (3) GA4에 이 블로그의 과거 인기글과 겹치는 주제인지
-  (조회수+체류시간 기준)를 함께 점수화해서 1~5위를 매긴 뒤 1위 주제로
-  글을 쓴다. 세 신호 모두 선택 사항이며, 설정/조회가 안 되면
+  (조회수+체류시간 기준)를 함께 점수화해서 순위를 매긴 뒤, 매번 1위만
+  쓰지 않고 상위 3위 중 하나를 가중 무작위(1위가 더 자주 뽑히도록)로
+  골라 그 주제로 글을 쓴다. 세 신호 모두 선택 사항이며, 설정/조회가 안 되면
   (NAVER_CLIENT_ID/SECRET, GA4_PROPERTY_ID/GA4_SERVICE_ACCOUNT_JSON
   미설정, pytrends 조회 실패 등) 조용히 살아있는 신호만으로, 전부
   실패하면 기존 큐 순서(FIFO) 그대로 동작한다 — 즉 이 기능이 없어도
@@ -30,6 +31,7 @@
 import datetime
 import json
 import os
+import random
 import re
 import sys
 import urllib.error
@@ -85,7 +87,11 @@ GA4_SERVICE_ACCOUNT_JSON = os.environ.get("GA4_SERVICE_ACCOUNT_JSON", "")
 NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
 
-CANDIDATE_POOL_SIZE = 5
+CANDIDATE_POOL_SIZE = 10
+# 매일 검색량 1위만 쓰지 않고 1~3위 중 하나를 뽑는다 (순위가 높을수록 더
+# 자주 뽑히도록 가중치를 둔다 - 3:2:1). 후보가 3개 미만이면 있는 만큼만 쓴다.
+TOP_N_CHOICES = 3
+TOP_N_WEIGHTS = [3, 2, 1]
 
 
 def get_next_topic() -> str:
@@ -172,11 +178,17 @@ def score_candidates_by_naver_datalab(candidates: list[str]) -> dict[str, float]
         resp = requests.post(
             "https://openapi.naver.com/v1/datalab/search",
             headers={
-                # 네이버 데이터랩 API는 NAVER Cloud Platform(NCP) API Gateway를
-                # 통해 제공되어, 예전 개발자센터 방식(X-Naver-Client-Id 등)이
-                # 아니라 NCP APIGW 전용 헤더 이름을 써야 한다.
-                "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
-                "X-NCP-APIGW-API-KEY": NAVER_CLIENT_SECRET,
+                # 이 엔드포인트(openapi.naver.com)는 네이버 개발자센터
+                # (developers.naver.com)에서 발급하는 고전 방식 Client ID/
+                # Secret을 그대로 X-Naver-Client-Id/Secret 헤더로 보내야 한다.
+                # 한때 NCP APIGW 전용 헤더(X-NCP-APIGW-API-KEY-ID 등)로 바꿨던
+                # 적이 있는데, 그건 이 도메인(openapi.naver.com)이 아니라
+                # NCP APIGW가 서비스하는 별도 도메인(*.apigw.ntruss.com)에서만
+                # 통하는 헤더라 잘못된 조합이었다 - 실제로 계속 401이 났다.
+                # README(7-2)도 developers.naver.com 앱 등록 기준으로 안내하고
+                # 있으므로, 발급받은 키도 이 고전 방식 Client ID/Secret이 맞다.
+                "X-Naver-Client-Id": NAVER_CLIENT_ID,
+                "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
                 "Content-Type": "application/json",
             },
             data=json.dumps(body),
@@ -300,13 +312,16 @@ def score_candidates_by_ga4(candidates: list[str], ga4_pages: list[dict]) -> dic
 
 
 def select_topic() -> str:
-    """큐 맨 앞 CANDIDATE_POOL_SIZE개 후보를 놓고 검색량(Google 트렌드,
-    네이버 데이터랩)과 자체 유입량/체류시간(GA4)을 함께 점수화해서 1~5위를
-    매긴 뒤, 1위 주제로 글을 쓴다. 선택된 주제만 큐 맨 뒤로 돌리고 나머지
-    후보는 그대로 앞쪽에 남겨서, 이번에 밀린 후보들이 다음날 다시 후보
-    풀에 들어가게 한다. 세 신호가 전부 실패/미설정이면 기존 FIFO와
-    동일하게 동작하고, 일부만 살아있으면 살아있는 신호만 동일 가중치로
-    평균 낸다 (신호가 적다고 순위가 왜곡되지 않도록)."""
+    """큐 맨 앞 CANDIDATE_POOL_SIZE(10)개 후보를 놓고 검색량(Google 트렌드,
+    네이버 데이터랩)과 자체 유입량/체류시간(GA4)을 함께 점수화해서 순위를
+    매긴 뒤, 매번 1위만 쓰지 않고 상위 TOP_N_CHOICES(3)위 중 하나를
+    가중 무작위로 골라 그 주제로 글을 쓴다(순위가 높을수록 더 자주
+    뽑힘 - TOP_N_WEIGHTS). 선택된 주제만 큐 맨 뒤로 돌리고 나머지 후보는
+    그대로 앞쪽에 남겨서, 이번에 밀린 후보들이 다음날 다시 후보 풀에
+    들어가게 한다. 세 신호가 전부 실패/미설정이면 기존 FIFO와 동일한
+    순서를 순위로 쓰고(그 안에서도 상위 3개 중 하나를 무작위로 고름),
+    일부만 살아있으면 살아있는 신호만 동일 가중치로 평균 낸다(신호가
+    적다고 순위가 왜곡되지 않도록)."""
     if not TOPICS_FILE.exists():
         sys.exit(f"주제 큐 파일이 없습니다: {TOPICS_FILE}")
 
@@ -350,7 +365,10 @@ def select_topic() -> str:
             f"GA4={ga4_scores.get(c, 0.0):.2f})"
         )
 
-    topic = ranked[0]
+    top_n = ranked[:TOP_N_CHOICES]
+    weights = TOP_N_WEIGHTS[: len(top_n)]
+    topic = random.choices(top_n, weights=weights, k=1)[0]
+    print(f"-> 오늘 선택: {top_n.index(topic) + 1}위 '{topic}' (상위 {len(top_n)}개 중 가중 무작위 선택)")
 
     remaining = [line for line in lines if line != topic]
     rotated = remaining + [topic]
