@@ -1163,11 +1163,11 @@ BLOGGER_PRIVACY_PAGE_MD = """\
 
 ## 3. 제휴 마케팅(어필리에이트) 고지
 
-이 블로그의 일부 게시글에는 쿠팡 파트너스 활동을 통한 제휴 링크가 포함되어 있으며, 이런 링크를 통해 상품을 구매하시면 이 블로그 운영자가 일정액의 수수료를 제공받을 수 있습니다. 해당 사실은 관련 게시글 본문에도 별도로 고지하고 있습니다.
+이 블로그에서 특정 제품을 구체적으로 소개하는 일부 게시글에는 쿠팡 파트너스 활동을 통한 제휴 링크가 포함되어 있으며, 이런 링크를 통해 상품을 구매하시면 이 블로그 운영자가 일정액의 수수료를 제공받을 수 있습니다. 해당 사실은 관련 게시글 본문에도 별도로 고지하고 있습니다. 매트리스·수면환경·건강·재무·핫이슈 같은 정보성 게시글에는 이런 제휴 링크가 붙지 않습니다.
 
 ## 4. 콘텐츠 제작 방식
 
-이 블로그의 글은 자동화된 콘텐츠 파이프라인을 통해 작성·발행됩니다. 주제 선정과 제품 정보는 운영자가 관리하며, 정보의 정확성을 위해 지속적으로 점검하고 있습니다.
+이 블로그의 글은 AI 자동화 도구의 도움을 받아 작성·발행되며, 다룰 주제와 방향은 운영자가 정합니다. 건강·투자·정치처럼 신중하게 다뤄야 하는 주제는 작성 시 검색으로 사실을 확인하고, 특정 질환의 진단·치료나 특정 종목의 매수·매도를 단정하지 않으며, 특정 정당·정치인을 지지·비판하지 않는 원칙을 적용합니다.
 
 ## 5. 문의
 
@@ -1181,13 +1181,18 @@ BLOGGER_PRIVACY_PAGE_MD = """\
 BLOGGER_ABOUT_PAGE_MD_TEMPLATE = """\
 ## 이 블로그는
 
-1인 가구와 반려동물을 키우는 분들이 반복해서 사야 하는 생활 소모품 — 생수, 화장지, 사료, 모래, 간편식 같은 것들 — 을 어떻게 고르고 어떤 주기로 구매하면 좋은지 정리합니다. 재구매 주기, 보관 방법, 성분표 읽는 법처럼 실제로 사고 쓰면서 부딪히는 질문들을 다룹니다.
+매트리스·침대 등 수면환경 관리, 청소, 공기청정기·제습기 같은 생활가전의 필요성, 영양제·건강 관련 정보, 그리고 보험·대출·주식 같은 재무 정보를 다룹니다. 매주 수요일과 토요일에는 정치·경제·사회·심리·주식 분야의 최근 이슈도 정리해서 소개합니다.
 
-## 운영 방식
+## 콘텐츠를 만드는 방식
 
-이 블로그는 콘텐츠 자동화 파이프라인을 통해 매일 새 글을 발행합니다. 다룰 주제와 소개하는 제품 정보는 운영자가 선정·확인하며, 게시글 내용은 이 과정을 거쳐 작성됩니다.
+다룰 주제와 방향은 운영자가 정합니다. 글은 AI 자동화 도구의 도움을 받아 작성되며, 특히 건강·투자·정치처럼 신중하게 다뤄야 하는 주제에는 다음 원칙을 적용합니다.
 
-일부 게시글에는 쿠팡 파트너스 제휴 링크가 포함되어 있고, 이를 통한 구매가 이루어지면 운영자가 일정액의 수수료를 받을 수 있습니다. 해당 사실은 관련 게시글마다 명시하고 있습니다. 자세한 내용은 [개인정보처리방침]({privacy_url}) 페이지를 참고해 주세요.
+- 최신 정보를 검색으로 확인한 뒤 작성하고, 확인되지 않은 내용은 쓰지 않습니다.
+- 건강 정보는 특정 질환의 진단·치료를 단정하지 않으며, 의학적 판단이 필요하면 의사·약사 상담을 권합니다.
+- 투자·재무 정보는 특정 상품 가입이나 종목 매수·매도를 권유하지 않으며, 관련 공식 출처를 함께 안내합니다.
+- 정치 이슈는 특정 정당·정치인을 지지하거나 비판하지 않고, 사실과 해석을 구분해서 씁니다.
+
+일부 게시글(제품을 구체적으로 소개하는 글)에는 쿠팡 파트너스 제휴 링크가 포함되어 있고, 이를 통한 구매가 이루어지면 운영자가 일정액의 수수료를 받을 수 있습니다. 해당 게시글에는 이 사실을 본문에 별도로 고지합니다. 매트리스·건강·재무·핫이슈 정보성 글에는 제휴 링크가 붙지 않습니다. 자세한 내용은 [개인정보처리방침]({privacy_url}) 페이지를 참고해 주세요.
 
 ## 연락
 
@@ -1196,11 +1201,12 @@ BLOGGER_ABOUT_PAGE_MD_TEMPLATE = """\
 
 
 def sync_blogger_static_pages() -> None:
-    """개인정보처리방침·소개 페이지가 Blogger에 아직 없으면 만들어 둔다.
-    제목 기준으로 이미 있으면 아무것도 하지 않으므로, 매일 실행돼도 안전하다
-    (idempotent). 애드센스는 실제로 신청하는 도메인(Blogger)에 이 페이지들이
-    있어야 심사가 되므로, GitHub Pages(docs/privacy.md, docs/about.md)와
-    같은 내용을 Blogger 쪽에도 맞춰 둔다. 실패해도 본 발행 흐름을 막지 않는다."""
+    """개인정보처리방침·소개 페이지를 Blogger에도 만들어 두고, 이미 있으면
+    최신 내용으로 갱신한다(제목 기준으로 찾아 PATCH) - 그래서 이 콘텐츠를
+    바꿀 때마다 다음 발행 때 Blogger 쪽도 자동으로 맞춰진다. 애드센스는
+    실제로 신청하는 도메인(Blogger)에 이 페이지들이 있어야 심사가 되므로,
+    GitHub Pages(docs/privacy.md, docs/about.md)와 같은 내용을 유지한다.
+    실패해도 본 발행 흐름을 막지 않는다."""
     if not blogger_configured():
         return
 
@@ -1226,30 +1232,34 @@ def sync_blogger_static_pages() -> None:
 
     existing_by_title = {p.get("title", ""): p for p in existing}
 
-    def _create_page(title: str, body_markdown: str) -> str | None:
-        payload = json.dumps({"title": title, "content": markdown_to_html(body_markdown)}).encode("utf-8")
-        req = urllib.request.Request(pages_url, data=payload, method="POST", headers=headers)
+    def _upsert_page(title: str, body_markdown: str) -> str | None:
+        content = markdown_to_html(body_markdown)
+        existing_page = existing_by_title.get(title)
+        if existing_page:
+            page_id = existing_page["id"]
+            url = f"{pages_url}{page_id}"
+            method, verb = "PATCH", "갱신"
+        else:
+            url = pages_url
+            method, verb = "POST", "생성"
+        payload = json.dumps({"title": title, "content": content}).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 result = json.loads(resp.read())
-            url = result.get("url")
-            print(f"Blogger {title} 페이지 생성 완료: {url}")
-            return url
+            page_url = result.get("url") or (existing_page or {}).get("url")
+            print(f"Blogger {title} 페이지 {verb} 완료: {page_url}")
+            return page_url
         except urllib.error.HTTPError as e:
-            print(f"Blogger {title} 페이지 생성 실패: {e.code} {e.reason}: {e.read().decode('utf-8', 'replace')}")
+            print(f"Blogger {title} 페이지 {verb} 실패: {e.code} {e.reason}: {e.read().decode('utf-8', 'replace')}")
         except urllib.error.URLError as e:
-            print(f"Blogger {title} 페이지 생성 실패: {e}")
-        return None
+            print(f"Blogger {title} 페이지 {verb} 실패: {e}")
+        return (existing_page or {}).get("url")
 
-    privacy_url = existing_by_title.get(BLOGGER_PRIVACY_PAGE_TITLE, {}).get("url")
-    if BLOGGER_PRIVACY_PAGE_TITLE not in existing_by_title:
-        privacy_url = _create_page(BLOGGER_PRIVACY_PAGE_TITLE, BLOGGER_PRIVACY_PAGE_MD)
+    privacy_url = _upsert_page(BLOGGER_PRIVACY_PAGE_TITLE, BLOGGER_PRIVACY_PAGE_MD)
 
-    if BLOGGER_ABOUT_PAGE_TITLE not in existing_by_title:
-        about_md = BLOGGER_ABOUT_PAGE_MD_TEMPLATE.format(
-            privacy_url=privacy_url or "https://www.blogger.com"
-        )
-        _create_page(BLOGGER_ABOUT_PAGE_TITLE, about_md)
+    about_md = BLOGGER_ABOUT_PAGE_MD_TEMPLATE.format(privacy_url=privacy_url or "https://www.blogger.com")
+    _upsert_page(BLOGGER_ABOUT_PAGE_TITLE, about_md)
 
 
 def fix_known_post_title() -> None:
