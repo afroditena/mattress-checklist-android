@@ -544,6 +544,18 @@ IMAGE_QUERY: (이 글에 어울리는 사진을 찾기 위한 영어 검색어 2
 HOT_ISSUE_CATEGORIES = ("경제", "사회", "심리", "주식")
 HOT_ISSUE_REGIONS = "미국, 유럽, 아시아, 대한민국"
 
+# 핫이슈 글의 IMAGE_QUERY는 그날 구체적인 이슈에 맞춰 AI가 즉석에서 지어내는
+# 영어 문구라, Unsplash에 검색 결과가 아예 없는 경우가 정보성 글보다 잦다
+# (실제로 확인됨). 검색 결과가 없으면 카테고리 단위의 무난한 대체 검색어로
+# 한 번 더 시도한다.
+HOT_ISSUE_FALLBACK_IMAGE_QUERY = {
+    "정치": "government building flags",
+    "경제": "city skyline finance",
+    "사회": "city street crowd",
+    "심리": "person thinking window",
+    "주식": "stock market chart screen",
+}
+
 
 def hot_issue_category_for_today(today: datetime.date | None = None) -> str | None:
     """오늘(KST)이 핫이슈 요일이면 다룰 카테고리를, 아니면 None을 돌려준다.
@@ -1386,6 +1398,17 @@ def main() -> None:
         # 정보성 글: 사진 3~5장(맨 위 1장 + 소제목마다 1장)을 흩어 배치해서
         # 체류시간과 가독성을 높인다.
         photos = find_stock_photos(image_query or keyword or topic, count=5)
+        if not photos and hot_issue_category:
+            # 핫이슈 글의 IMAGE_QUERY는 그날그날 구체적인 이슈에 맞춰 AI가
+            # 즉석에서 만든 영어 문구라(예: "national flags diplomatic
+            # meeting room") Unsplash에 검색 결과가 아예 없는 경우가 실제로
+            # 있었다. 정보성 글과 달리 매번 새로 지어내는 문구라 이런
+            # 공백이 더 잦으므로, 카테고리 단위의 무난한 대체 검색어로
+            # 한 번 더 시도한다.
+            fallback_query = HOT_ISSUE_FALLBACK_IMAGE_QUERY.get(hot_issue_category)
+            if fallback_query:
+                print(f"핫이슈 이미지 검색어 대체 시도: '{image_query}' -> '{fallback_query}'")
+                photos = find_stock_photos(fallback_query, count=5)
         body = distribute_images_into_body(body, photos)
 
     today = datetime.date.today()
