@@ -26,6 +26,12 @@
   미설정, pytrends 조회 실패 등) 조용히 살아있는 신호만으로, 전부
   실패하면 기존 큐 순서(FIFO) 그대로 동작한다 — 즉 이 기능이 없어도
   전혀 문제 없이 발행된다.
+- 매주 수요일은 topics.txt 큐 대신 "정치" 핫이슈(미국/유럽/아시아/대한민국
+  중 실제로 화제인 곳)를, 매주 토요일은 경제/사회/심리/주식 중 하나(ISO
+  주차 기준 순환)를 web_search로 찾아서 다룬다 - 정치는 편향 시비 리스크가
+  커서 요일 고정으로 정확히 7일에 1일만 나가게 못박아 뒀다. 그 외 요일은
+  기존 니치(매트리스/건강/재무) 그대로 동작하고, 핫이슈 요일엔 topics.txt
+  큐를 건드리지 않는다 (hot_issue_category_for_today() 참고).
 """
 
 import datetime
@@ -535,6 +541,99 @@ IMAGE_QUERY: (이 글에 어울리는 사진을 찾기 위한 영어 검색어 2
 """
 
 
+HOT_ISSUE_CATEGORIES = ("경제", "사회", "심리", "주식")
+HOT_ISSUE_REGIONS = "미국, 유럽, 아시아, 대한민국"
+
+
+def hot_issue_category_for_today(today: datetime.date | None = None) -> str | None:
+    """오늘(KST)이 핫이슈 요일이면 다룰 카테고리를, 아니면 None을 돌려준다.
+
+    - 수요일: 정치 (편향성 시비 리스크가 커서 7일에 1일로 못박아 둔다 -
+      요일 고정이라 주 1회가 보장되고, 로그로도 바로 확인된다).
+    - 토요일: 경제/사회/심리/주식 중 하나를 ISO 주차 기준으로 순환한다
+      (그 주에 어떤 카테고리인지 결정적으로 정해져서, 재실행해도 같은
+      결과가 나온다 - 별도 상태 파일이 필요 없다).
+    - 그 외 요일: 기존 니치(매트리스/건강/재무) 그대로, None을 돌려준다.
+    """
+    if today is None:
+        today = datetime.date.today()
+    weekday = today.weekday()  # 월요일=0 ... 일요일=6
+    if weekday == 2:  # 수요일
+        return "정치"
+    if weekday == 5:  # 토요일
+        iso_week = today.isocalendar()[1]
+        return HOT_ISSUE_CATEGORIES[iso_week % len(HOT_ISSUE_CATEGORIES)]
+    return None
+
+
+def build_hot_issue_prompt(category: str, recent_titles: list[str]) -> str:
+    """정치/경제/사회/심리/주식 핫이슈 글용 프롬프트. build_prompt()와 달리
+    미리 정해둔 주제 문장이 없고, web_search로 실제 최근 이슈를 찾아서
+    그걸 소재로 쓰게 한다 - 지어낸 뉴스가 아니라 실제 있었던 일이어야
+    하므로 검색이 선택이 아니라 필수다."""
+    avoid_block = ""
+    if recent_titles:
+        recent_list = "\n".join(f"- {t}" for t in recent_titles)
+        avoid_block = f"\n최근에 이미 다룬 제목들이니 같은 이슈를 반복하지 마:\n{recent_list}\n"
+
+    if category == "정치":
+        guard = (
+            "\n정치 이슈는 편향 시비가 나기 가장 쉬운 주제야. 특정 정당·정치인·진영을 "
+            "지지하거나 비판하는 표현, 단정적 가치 판단은 절대 쓰지 마. 여러 입장이 "
+            "있는 사안이면 주요 입장을 균형 있게 소개하고, 사실(누가 무엇을 했다/발표했다)과 "
+            "해석·전망을 명확히 구분해서 써. '충격', '경악' 같은 자극적 수식어도 쓰지 마.\n"
+        )
+    elif category in ("주식", "증권", "증시"):
+        guard = (
+            "\n주식/증시 이슈는 자본시장법상 투자자문업 등록 없이 특정 종목의 매수·매도를 "
+            "권유하면 안 되는 분야야. '지금 사라/팔아라', '오를 것이다/떨어질 것이다' 같은 "
+            "단정적 전망이나 특정 종목 추천은 절대 쓰지 말고, 무슨 일이 있었는지(발표·지표· "
+            "이벤트)와 시장이 왜 그렇게 반응했는지 설명하는 데 집중해. 본문 끝에 투자 유의 "
+            "안내가 자동으로 붙으니 본문에서 직접 투자를 권유하는 문장은 쓰지 마.\n"
+        )
+    else:
+        guard = (
+            "\n확인되지 않은 추측이나 소문을 사실처럼 쓰지 말고, 실제 발표·통계·사건 위주로 써. "
+            "특정 집단을 비하하거나 자극적으로 단정하는 표현은 쓰지 마.\n"
+        )
+
+    web_search_guard = (
+        f"\n먼저 web_search 도구로 최근 1주일 이내 {HOT_ISSUE_REGIONS} 중 한 곳에서 "
+        f"'{category}' 분야에서 실제로 있었던, 사람들이 관심 가질 만한 이슈를 찾아봐 "
+        "(여러 지역 후보를 검토해서, 그중 가장 화제성이 크고 근거가 분명한 이슈 하나를 "
+        "골라). 검색으로 확인 안 된 내용은 쓰지 말고, 검색 과정 설명 없이 확인한 사실만 "
+        "자연스럽게 녹여서 바로 아래 형식으로만 답해줘.\n"
+    )
+
+    return f"""오늘 다룰 핫이슈 분야: {category} (대상 지역: {HOT_ISSUE_REGIONS} 중 실제로 화제인 곳)
+{avoid_block}{guard}{web_search_guard}
+아래 형식을 정확히 지켜서 한국어 블로그 글을 작성해줘.
+
+TITLE: (실제 이슈를 구체적으로 담은 제목, 30자 내외, 과장/낚시성 문구 금지)
+TAGS: (쉼표로 구분된 태그 3~5개, 관련 지역명과 "{category}" 포함)
+KEYWORD: (이 이슈의 핵심 소재를 나타내는 키워드 1개)
+IMAGE_QUERY: (이 글에 어울리는 사진을 찾기 위한 영어 검색어 2~4단어,
+  특정 인물 초상보다는 상징적인 장면 위주로. 예: "stock market chart screen",
+  "city skyline finance district")
+---
+(본문 마크다운. 1200~1800자 분량. 소제목(##) 2~4개 - 예: "무슨 일이 있었나",
+"왜 중요한가", "앞으로 지켜볼 점" 같은 구성. 실제 검색으로 확인한 사실 위주로
+쓰고, 어느 기관·매체 발표인지 자연스럽게 언급해. 말투는 자연스러운 존댓말
+블로그 톤으로.)
+"""
+
+
+def build_hot_issue_disclaimer_block() -> str:
+    """핫이슈 글은 매트리스 관리법 같은 상록(常綠) 정보와 달리 시점에 따라
+    내용이 금방 바뀔 수 있어서, 정보성/건강/금융 출처 블록과 별개로 이
+    프레시니스 고지를 항상 붙인다."""
+    return (
+        "\n\n---\n\n"
+        "*이 글은 작성 시점을 기준으로 확인된 내용을 정리한 것으로, 이후 상황이 "
+        "바뀌었을 수 있습니다. 최신 내용은 원 발표·보도를 직접 확인하시기 바랍니다.*\n"
+    )
+
+
 def build_product_prompt(manual: dict, recent_titles: list[str]) -> str:
     """load_manual_topic()으로 받은 특정 제품 정보를 바탕으로 글을 쓰게 하는
     프롬프트. build_prompt()와 형식(TITLE/TAGS/IMAGE_QUERY/본문)은 같지만,
@@ -693,6 +792,7 @@ def build_affiliate_block(keyword: str) -> str:
 FINANCE_KEYWORDS = (
     "보험", "금융", "렌탈", "렌트", "대출", "카드", "금리", "이자",
     "신용점수", "신용", "적금", "예금", "연금",
+    "주식", "증시", "코스피", "코스닥", "나스닥", "증권", "투자", "환율",
 )
 
 FINANCE_DEFAULT_LINKS = [
@@ -703,6 +803,14 @@ FINANCE_CATEGORY_LINKS = {
     "보험": [("보험다모아 (생명·손해보험협회 공동 보험료 비교공시)", "https://e-insmarket.or.kr")],
     "렌탈": [("한국소비자원 (렌탈 계약·피해예방 정보)", "https://www.kca.go.kr")],
     "렌트": [("한국소비자원 (렌탈 계약·피해예방 정보)", "https://www.kca.go.kr")],
+    "주식": [
+        ("금융감독원 전자공시시스템 DART", "https://dart.fss.or.kr"),
+        ("한국거래소(KRX) 정보데이터시스템", "https://data.krx.co.kr"),
+    ],
+    "증시": [
+        ("금융감독원 전자공시시스템 DART", "https://dart.fss.or.kr"),
+        ("한국거래소(KRX) 정보데이터시스템", "https://data.krx.co.kr"),
+    ],
 }
 
 
@@ -735,10 +843,18 @@ def build_finance_sources_block(topic: str, tags: str) -> str:
     lines = ["\n\n---\n", "**📌 더 정확한 정보가 필요하다면 아래 공식 출처에서 확인하세요:**\n"]
     for name, url in unique_links:
         lines.append(f"- [{name}]({url})")
-    lines.append(
-        "\n*이 글은 정보 제공을 목적으로 하며, 실제 상품 가입 전 반드시 "
-        "위 공식 출처나 해당 상품 판매사를 통해 최신 조건을 확인하시기 바랍니다.*\n"
-    )
+    if any(kw in haystack for kw in ("주식", "증시", "코스피", "코스닥", "나스닥", "증권", "투자")):
+        lines.append(
+            "\n*이 글은 정보 제공을 목적으로 하며 특정 종목의 매수·매도를 "
+            "권유하지 않습니다. 투자 판단과 그 결과에 대한 책임은 투자자 "
+            "본인에게 있으니, 위 공식 출처와 증권사 리서치 등을 통해 직접 "
+            "확인하시기 바랍니다.*\n"
+        )
+    else:
+        lines.append(
+            "\n*이 글은 정보 제공을 목적으로 하며, 실제 상품 가입 전 반드시 "
+            "위 공식 출처나 해당 상품 판매사를 통해 최신 조건을 확인하시기 바랍니다.*\n"
+        )
     return "\n".join(lines)
 
 
@@ -1225,15 +1341,27 @@ def main() -> None:
     manual = load_manual_topic()
     recent_titles = get_recent_titles()
 
+    # 핫이슈 요일 판정은 실행 시각(UTC)이 아니라 실제 발행되는 KST 기준
+    # 요일로 해야 한다 - 이 워크플로는 22:00 UTC(=07:00 KST 다음날)에 돌기
+    # 때문에, UTC 그대로 쓰면 요일이 하루 밀린다.
+    kst_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+    hot_issue_category = None if manual else hot_issue_category_for_today(kst_now.date())
+
     if manual:
         topic = manual["topic"]
         prompt = build_product_prompt(manual, recent_titles)
+    elif hot_issue_category:
+        weekday_kr = "월화수목금토일"[kst_now.weekday()]
+        print(f"오늘은 핫이슈 요일입니다 (KST {kst_now.date().isoformat()} {weekday_kr}요일) -> 카테고리: {hot_issue_category}")
+        topic = f"{hot_issue_category} 핫이슈"
+        prompt = build_hot_issue_prompt(hot_issue_category, recent_titles)
     else:
         topic = select_topic()
         prompt = build_prompt(topic, recent_titles)
 
-    # 정보성 글(주제 큐 기반)만 web_search 도구를 켠다 - 제품 지정 발행은 이미
-    # 실제로 주어진 product_info만 근거로 쓰게 돼 있어서 검색이 필요 없다.
+    # manual(제품 지정 발행)만 web_search를 끈다 - 이미 실제로 주어진
+    # product_info만 근거로 쓰게 돼 있어서 검색이 필요 없다. 정보성 글과
+    # 핫이슈 글은 둘 다 실제 사실 확인이 필요해서 켠다.
     raw_output = call_claude(prompt, enable_web_search=not manual)
     title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=topic)
 
@@ -1276,19 +1404,24 @@ def main() -> None:
         affiliate_block = build_manual_affiliate_block(manual)
         finance_block = ""
         health_block = ""
+        hot_issue_block = ""
     else:
         # 정보성 글(주제 큐 기반 발행)에는 쿠팡 링크를 달지 않는다 - 실제
         # 제휴 상품은 날짜/제품/링크를 지정한 manual_topic(_queue)로만 발행한다.
         affiliate_block = ""
         finance_block = build_finance_sources_block(topic, tags)
         health_block = build_health_sources_block(topic, tags)
+        # 핫이슈 글은 시점에 따라 내용이 바뀔 수 있어서, 건강/금융 주제와
+        # 매칭되는지와 별개로 프레시니스 고지를 항상 붙인다.
+        hot_issue_block = build_hot_issue_disclaimer_block() if hot_issue_category else ""
     post_path.write_text(
-        front_matter + "\n" + body + affiliate_block + finance_block + health_block, encoding="utf-8"
+        front_matter + "\n" + body + affiliate_block + finance_block + health_block + hot_issue_block,
+        encoding="utf-8",
     )
 
     print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
 
-    post_to_blogger(safe_title, body + affiliate_block + finance_block + health_block)
+    post_to_blogger(safe_title, body + affiliate_block + finance_block + health_block + hot_issue_block)
     sync_blogger_static_pages()
 
     if manual:
