@@ -15,6 +15,14 @@ on:
           (fix_known_post_title() 참고). 평소엔 항상 false로 두면 됨.
         required: false
         default: "false"
+      force_hot_issue_category:
+        description: >-
+          비워두면 평소대로 요일 기준(수=정치, 토=경제/사회/심리/주식
+          순환)으로 동작. 값을 채우면(정치/경제/사회/심리/주식 중 하나)
+          오늘 요일과 무관하게 그 카테고리로 핫이슈 글을 강제 발행 -
+          수요일/토요일이 아닐 때 미리 검증해보고 싶을 때 사용.
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -38,6 +46,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RUN_FIX_KNOWN_POST_TITLE: ${{ github.event.inputs.fix_known_post_title || 'false' }}
+          FORCE_HOT_ISSUE_CATEGORY: ${{ github.event.inputs.force_hot_issue_category || '' }}
           # 아래 4개는 구글 Blogger 동시 발행용 (선택, 미설정이면 자동으로 건너뜀)
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}

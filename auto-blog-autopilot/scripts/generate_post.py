@@ -1345,7 +1345,15 @@ def main() -> None:
     # 요일로 해야 한다 - 이 워크플로는 22:00 UTC(=07:00 KST 다음날)에 돌기
     # 때문에, UTC 그대로 쓰면 요일이 하루 밀린다.
     kst_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-    hot_issue_category = None if manual else hot_issue_category_for_today(kst_now.date())
+    forced_category = os.environ.get("FORCE_HOT_ISSUE_CATEGORY", "").strip()
+    if manual:
+        hot_issue_category = None
+    elif forced_category in HOT_ISSUE_CATEGORIES or forced_category == "정치":
+        # workflow_dispatch 수동 검증용: 수/토가 아닌 날에도 미리 확인해볼 수 있게.
+        print(f"FORCE_HOT_ISSUE_CATEGORY로 강제 지정됨: {forced_category}")
+        hot_issue_category = forced_category
+    else:
+        hot_issue_category = hot_issue_category_for_today(kst_now.date())
 
     if manual:
         topic = manual["topic"]
