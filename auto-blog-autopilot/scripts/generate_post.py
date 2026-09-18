@@ -704,7 +704,13 @@ SCREENSHOTS_ASSET_DIR = DOCS_DIR / "assets" / "img"
 # markdown과 Blogger HTML 양쪽에서 그대로 쓸 수 있는 절대 URL이 필요해서
 # site.baseurl 같은 상대 경로 태그 대신 이 값을 직접 붙인다.
 SITE_BASE_URL = "https://afroditena.github.io/mattress-checklist-android"
-PLAYWRIGHT_CHROMIUM_PATH = os.environ.get("PLAYWRIGHT_CHROMIUM_PATH", "/opt/pw-browsers/chromium")
+# 기본은 비워둔다 - Playwright가 자기가 설치한 브라우저를 스스로 찾게 둔다
+# (워크플로가 매번 `playwright install chromium`으로 설치하므로 GitHub
+# Actions에서는 이게 정답이다). 특수한 환경(예: 브라우저가 표준 캐시 경로가
+# 아닌 곳에 미리 설치돼 있고 pip playwright 버전과 리비전이 안 맞는 경우)
+# 에서만 PLAYWRIGHT_CHROMIUM_PATH 환경변수로 실행 파일 경로를 직접 지정해서
+# 오버라이드한다.
+PLAYWRIGHT_CHROMIUM_PATH = os.environ.get("PLAYWRIGHT_CHROMIUM_PATH", "")
 
 
 def capture_page_screenshot(url: str, out_path: Path) -> bool:
@@ -720,7 +726,10 @@ def capture_page_screenshot(url: str, out_path: Path) -> bool:
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(executable_path=PLAYWRIGHT_CHROMIUM_PATH, headless=True)
+            launch_kwargs = {"headless": True}
+            if PLAYWRIGHT_CHROMIUM_PATH:
+                launch_kwargs["executable_path"] = PLAYWRIGHT_CHROMIUM_PATH
+            browser = p.chromium.launch(**launch_kwargs)
             try:
                 page = browser.new_page(viewport={"width": 1280, "height": 800})
                 page.goto(url, timeout=20000, wait_until="load")
