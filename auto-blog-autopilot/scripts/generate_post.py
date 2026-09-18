@@ -1374,6 +1374,21 @@ def main() -> None:
         fix_known_post_title()
         return
 
+    if os.environ.get("FORCE_PUBLISH_DURING_PIVOT") != "true":
+        # 2026-09-18: 블로그 니치를 "AI-Powered Productivity Tools"(영어)로
+        # 완전히 전환하기로 결정됨에 따라, 기존 니치(매트리스/건강/재무/
+        # 정치·경제 핫이슈, topics.txt)로 자동 발행되는 걸 막아둔다. 지금
+        # 큐에 있는 주제는 전부 새 기준(클러스터 A~E, 포맷별 구조, 영어,
+        # 출처 인용, 이미지 규칙)과 맞지 않으므로 새 파이프라인이 준비되고
+        # 사용자가 확인하기 전까지는 발행을 건너뛰고 검토를 요청한다.
+        # (새 파이프라인이 준비되면 이 게이트를 제거한다.)
+        print(
+            "니치 전환 검토 대기 중: 새 AI 생산성툴 니치(영어) 파이프라인이 "
+            "아직 준비되지 않아 이번 회차는 발행을 건너뜁니다. 기존 큐 "
+            "주제는 새 기준과 맞지 않습니다 - 검토 필요."
+        )
+        return
+
     manual = load_manual_topic()
     recent_titles = get_recent_titles()
 
