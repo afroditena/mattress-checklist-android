@@ -1,4 +1,4 @@
 ---
 layout: home
-title: 홈
+title: Home
 ---

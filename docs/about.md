@@ -1,28 +1,30 @@
 ---
 layout: default
-title: 소개
-description: 이 블로그가 다루는 주제와 운영 방식
+title: About
+description: What this blog covers and how it's run
 ---
 
-## 이 블로그는
+## What This Blog Covers
 
-매트리스·침대 등 수면환경 관리, 청소, 공기청정기·제습기 같은 생활가전의 필요성, 영양제·건강 관련 정보, 그리고 보험·대출·주식 같은 재무 정보를 다룹니다. 매주 수요일과 토요일에는 정치·경제·사회·심리·주식 분야의 최근 이슈도 정리해서 소개합니다.
+This blog covers AI-powered productivity tools: practical guides for tools like ChatGPT and Claude, free/budget alternatives to popular software, fixes for common remote-work tool problems (Zoom, Google Meet, Google Drive, Slack, Notion, Google Docs), and head-to-head comparisons of productivity software.
 
-## 운영자 소개
+## About the Operator
 
-이 블로그는 개인 운영자 1인이 기획하고 운영합니다. 어떤 주제를 다룰지, 언제 발행할지는 운영자가 직접 정하고, 글을 쓰는 과정에는 AI 자동화 도구의 도움을 받습니다. 다만 최종적으로 어떤 내용을 올릴지, 그 내용이 사실에 맞는지에 대한 책임은 AI가 아니라 운영자에게 있습니다. 품질을 높이기 위해 매일이 아니라 주중 며칠에 걸쳐 발행합니다.
+This blog is run by a single independent operator. The operator decides what topics to cover and when to publish, and the writing process uses AI automation tools. Final responsibility for what's published - and whether it's accurate - rests with the operator, not the AI. Posts are published a few days a week rather than daily, to keep the focus on quality over volume.
 
-## 콘텐츠를 만드는 방식
+## How Content Is Made
 
-다룰 주제와 방향은 운영자가 정합니다. 글은 AI 자동화 도구의 도움을 받아 작성되며, 특히 건강·투자·정치처럼 신중하게 다뤄야 하는 주제에는 다음 원칙을 적용합니다.
+- Every post is fact-checked with web search before publishing, especially for anything that changes over time, like software pricing, plans, or feature availability.
+- Official vendor pages (pricing pages, support/help-center pages) are cited directly as sources rather than summarizing third-party reviews.
+- Screenshots used in posts are captured directly from the official public pages being discussed; posts don't reuse other sites' or blogs' images.
+- Posts aim to be useful and specific rather than padded out to hit a word count.
 
-- 최신 정보를 검색으로 확인한 뒤 작성하고, 확인되지 않은 내용은 쓰지 않습니다.
-- 건강 정보는 특정 질환의 진단·치료를 단정하지 않으며, 의학적 판단이 필요하면 의사·약사 상담을 권합니다.
-- 투자·재무 정보는 특정 상품 가입이나 종목 매수·매도를 권유하지 않으며, 관련 공식 출처를 함께 안내합니다.
-- 정치 이슈는 특정 정당·정치인을 지지하거나 비판하지 않고, 사실과 해석을 구분해서 씁니다.
+This blog currently carries no affiliate or referral links. See the [Privacy Policy]({{ '/privacy' | relative_url }}) page for more detail.
 
-일부 게시글(제품을 구체적으로 소개하는 글)에는 쿠팡 파트너스 제휴 링크가 포함되어 있고, 이를 통한 구매가 이루어지면 운영자가 일정액의 수수료를 받을 수 있습니다. 해당 게시글에는 이 사실을 본문에 별도로 고지합니다. 매트리스·건강·재무·핫이슈 정보성 글에는 제휴 링크가 붙지 않습니다. 자세한 내용은 [개인정보처리방침]({{ '/privacy' | relative_url }}) 페이지를 참고해 주세요.
+## A Note on Older Posts
 
-## 연락
+Posts published before September 2026 cover a different topic (mattresses, sleep, and home health) and are in Korean - they remain published as an archive but are no longer being added to.
 
-블로그 내용에 대한 의견이나 문의는 게시글 댓글로 남겨 주시면 확인합니다.
+## Contact
+
+Questions or feedback about this blog can be left as a comment on any post.

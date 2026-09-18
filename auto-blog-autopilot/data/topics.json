@@ -1,0 +1,242 @@
+[
+  {
+    "id": "a1",
+    "cluster": "A",
+    "cluster_name": "AI Writing & Content Tools",
+    "keyword": "How to Summarize a PDF with Claude",
+    "format": "how_to",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "a2",
+    "cluster": "A",
+    "cluster_name": "AI Writing & Content Tools",
+    "keyword": "How to Write a Resume with ChatGPT",
+    "format": "how_to",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "a3",
+    "cluster": "A",
+    "cluster_name": "AI Writing & Content Tools",
+    "keyword": "How to Turn Meeting Notes into an Action Plan with ChatGPT",
+    "format": "how_to",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "a4",
+    "cluster": "A",
+    "cluster_name": "AI Writing & Content Tools",
+    "keyword": "How to Fact-Check ChatGPT Answers Before You Publish Them",
+    "format": "how_to",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "a5",
+    "cluster": "A",
+    "cluster_name": "AI Writing & Content Tools",
+    "keyword": "How to Keep a Consistent Writing Style Using Claude Projects",
+    "format": "how_to",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "a6",
+    "cluster": "A",
+    "cluster_name": "AI Writing & Content Tools",
+    "keyword": "How to Build a Content Calendar with ChatGPT",
+    "format": "how_to",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "b1",
+    "cluster": "B",
+    "cluster_name": "AI Productivity & Automation",
+    "keyword": "How to Automate Your Calendar with AI",
+    "format": "how_to",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "b2",
+    "cluster": "B",
+    "cluster_name": "AI Productivity & Automation",
+    "keyword": "How to Use ChatGPT to Draft and Reply to Emails Faster",
+    "format": "how_to",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "b3",
+    "cluster": "B",
+    "cluster_name": "AI Productivity & Automation",
+    "keyword": "How to Build a No-Code Automation Between ChatGPT and Google Sheets",
+    "format": "how_to",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "b4",
+    "cluster": "B",
+    "cluster_name": "AI Productivity & Automation",
+    "keyword": "Best AI Meeting Assistants for Remote Teams in 2026",
+    "format": "how_to",
+    "content_type": "trend"
+  },
+  {
+    "id": "b5",
+    "cluster": "B",
+    "cluster_name": "AI Productivity & Automation",
+    "keyword": "How AI Note-Takers Are Changing Remote Meetings This Year",
+    "format": "how_to",
+    "content_type": "trend"
+  },
+  {
+    "id": "b6",
+    "cluster": "B",
+    "cluster_name": "AI Productivity & Automation",
+    "keyword": "Top AI Scheduling Tools Gaining Traction in 2026",
+    "format": "how_to",
+    "content_type": "trend"
+  },
+  {
+    "id": "c1",
+    "cluster": "C",
+    "cluster_name": "Free/Budget Software Alternatives",
+    "keyword": "Best Free Alternatives to Canva for Simple Graphic Design",
+    "format": "alternative",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "c2",
+    "cluster": "C",
+    "cluster_name": "Free/Budget Software Alternatives",
+    "keyword": "Best Free Alternatives to Notion for Personal Note-Taking",
+    "format": "alternative",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "c3",
+    "cluster": "C",
+    "cluster_name": "Free/Budget Software Alternatives",
+    "keyword": "Best Free Alternatives to Zoom for Small Team Video Calls",
+    "format": "alternative",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "c4",
+    "cluster": "C",
+    "cluster_name": "Free/Budget Software Alternatives",
+    "keyword": "Best Free Alternatives to Photoshop for Quick Photo Editing",
+    "format": "alternative",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "c5",
+    "cluster": "C",
+    "cluster_name": "Free/Budget Software Alternatives",
+    "keyword": "Best Free Alternatives to Grammarly for Grammar Checking",
+    "format": "alternative",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "c6",
+    "cluster": "C",
+    "cluster_name": "Free/Budget Software Alternatives",
+    "keyword": "Best Free Alternatives to Slack for Small Team Chat",
+    "format": "alternative",
+    "content_type": "comparison_alt"
+  },
+  {
+    "id": "d1",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Zoom Microphone Not Working: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d2",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Google Meet Screen Share Not Working: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d3",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Google Drive Not Syncing: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d4",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Slack Notifications Not Working: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d5",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Notion Page Stuck Loading: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d6",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "How to Recover an Unsaved or Lost Google Docs File",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "e1",
+    "cluster": "E",
+    "cluster_name": "Productivity Software Comparisons",
+    "keyword": "Notion vs Obsidian: Which Note-Taking App Should You Choose?",
+    "format": "comparison",
+    "content_type": "comparison_alt"
+  },
+  {
+    "id": "e2",
+    "cluster": "E",
+    "cluster_name": "Productivity Software Comparisons",
+    "keyword": "Trello vs Asana: Which Project Management Tool Fits Your Team?",
+    "format": "comparison",
+    "content_type": "comparison_alt"
+  },
+  {
+    "id": "e3",
+    "cluster": "E",
+    "cluster_name": "Productivity Software Comparisons",
+    "keyword": "Todoist vs Notion: Which To-Do App Should You Use in 2026?",
+    "format": "comparison",
+    "content_type": "comparison_alt"
+  },
+  {
+    "id": "e4",
+    "cluster": "E",
+    "cluster_name": "Productivity Software Comparisons",
+    "keyword": "Google Workspace vs Microsoft 365: Which Is Better for Small Teams?",
+    "format": "comparison",
+    "content_type": "comparison_alt"
+  },
+  {
+    "id": "e5",
+    "cluster": "E",
+    "cluster_name": "Productivity Software Comparisons",
+    "keyword": "Otter.ai vs Google Meet's Built-In Transcription: Which Is More Accurate?",
+    "format": "comparison",
+    "content_type": "comparison_alt"
+  },
+  {
+    "id": "e6",
+    "cluster": "E",
+    "cluster_name": "Productivity Software Comparisons",
+    "keyword": "ClickUp vs Monday.com: Which Project Management Tool Is Worth It?",
+    "format": "comparison",
+    "content_type": "comparison_alt"
+  }
+]

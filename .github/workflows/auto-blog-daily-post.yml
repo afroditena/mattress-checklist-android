@@ -5,7 +5,7 @@ name: Auto Blog Daily Post
 # 자동으로 실행되지 않고, Actions 탭에서 수동 실행(workflow_dispatch)만 가능합니다.
 on:
   schedule:
-    - cron: "0 22 * * *" # 매일 UTC 22:00 = 한국시간(KST) 오전 7시
+    - cron: "0 22 * * *" # 매일 UTC 22:00 = 한국시간(KST) 오전 7시 (REST_WEEKDAYS면 스크립트가 스스로 건너뜀)
   workflow_dispatch:
     inputs:
       fix_known_post_title:
@@ -15,14 +15,6 @@ on:
           (fix_known_post_title() 참고). 평소엔 항상 false로 두면 됨.
         required: false
         default: "false"
-      force_hot_issue_category:
-        description: >-
-          비워두면 평소대로 요일 기준(수=정치, 토=경제/사회/심리/주식
-          순환)으로 동작. 값을 채우면(정치/경제/사회/심리/주식 중 하나)
-          오늘 요일과 무관하게 그 카테고리로 핫이슈 글을 강제 발행 -
-          수요일/토요일이 아닐 때 미리 검증해보고 싶을 때 사용.
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -42,40 +34,40 @@ jobs:
       - name: Install dependencies
         run: pip install -r auto-blog-autopilot/requirements.txt
 
+      - name: Install Playwright browser (Chromium only)
+        # SOURCES(공식 페이지)를 직접 캡처하는 데만 쓰므로 Chromium 하나면
+        # 충분하다. 실패해도(네트워크 문제 등) 본 발행 자체를 막지 않도록
+        # continue-on-error로 두고, generate_post.py 쪽은 playwright 실행
+        # 자체가 실패하면 조용히 Unsplash로 대체한다.
+        run: python -m playwright install --with-deps chromium
+        continue-on-error: true
+
       - name: Generate today's post
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RUN_FIX_KNOWN_POST_TITLE: ${{ github.event.inputs.fix_known_post_title || 'false' }}
-          FORCE_HOT_ISSUE_CATEGORY: ${{ github.event.inputs.force_hot_issue_category || '' }}
           # 아래 4개는 구글 Blogger 동시 발행용 (선택, 미설정이면 자동으로 건너뜀)
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
-          # 무료 스톡 사진(Unsplash) 자동 삽입용 (선택, 미설정이면 이미지 없이 발행)
+          # 공식 페이지 캡처가 하나도 성공 못 했을 때만 대표 이미지로 쓰는
+          # Unsplash 폴백용 (선택, 미설정이면 이미지 없이 발행)
           UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-          # 주제 선정 시 GA4(자체 유입량/체류시간) 순위 매기기용
-          # (선택, 미설정이면 검색량 순위만 또는 기존 큐 순서(FIFO)로 동작)
-          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
-          GA4_SERVICE_ACCOUNT_JSON: ${{ secrets.GA4_SERVICE_ACCOUNT_JSON }}
-          # 주제 선정 시 네이버 데이터랩(검색어트렌드) 순위 매기기용
-          # (선택, 미설정이면 이 신호 없이 동작)
-          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
-          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: python auto-blog-autopilot/scripts/generate_post.py
 
       - name: Commit and push new post
         run: |
           git config user.name "auto-blog-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add docs/_posts auto-blog-autopilot/data/topics.txt
-          # manual_topic.json / manual_topic_queue.json은 존재할 때만 있는 선택적
-          # 파일이라, 이미 소비되어 없어진(그리고 그 삭제가 예전에 커밋된) 상태에서
-          # 그대로 "git add"하면 "pathspec did not match any files"로 실패한다
-          # (실제로 이 버그 때문에 발행은 성공했는데 커밋/푸시가 통째로 실패한 적이
-          # 있었다). 지금 워킹트리에 있거나(정상 케이스), 이번 커밋 기준으로
-          # 추적되고 있을 때만(이번에 막 지워진 케이스) add 한다.
-          for f in auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json; do
+          git add docs/_posts
+          # docs/assets(캡처한 스크린샷)와 used_topic_ids.json은 이번 실행에서
+          # 처음 생성됐을 수도 있는 파일/폴더라, 아직 한 번도 없었으면
+          # "git add"가 "pathspec did not match any files"로 실패한다
+          # (manual_topic.json 계열과 같은 이유 - 존재하거나 이미 추적 중일
+          # 때만 add 한다).
+          for f in docs/assets auto-blog-autopilot/data/used_topic_ids.json \
+                   auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json; do
             if [ -e "$f" ] || git cat-file -e "HEAD:$f" 2>/dev/null; then
               git add "$f"
             fi

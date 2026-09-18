@@ -2,36 +2,39 @@
 """
 매일 GitHub Actions에서 실행되어 블로그 글 1편을 자동 생성하는 스크립트.
 
-- data/topics.txt 에서 주제를 하나 꺼내 쓰고, 큐 맨 뒤로 돌려보낸다 (무한 로테이션).
-  이 큐로 발행되는 글은 전부 정보성 글이며, 쿠팡파트너스 등 어떤 제휴/수익화
-  링크도 붙이지 않는다. 실제 제품·제휴 링크가 필요한 날은 아래 manual_topic
-  (_queue) 오버라이드로 날짜·제품·링크를 직접 지정해서 발행한다.
+2026-09-18: 니치를 "AI-Powered Productivity Tools"(영어, 미국 독자 대상)로
+완전히 전환했다. 이전 니치(매트리스/건강/재무/정치경제 핫이슈, 전부 한국어)는
+폐기했고 관련 코드(select_topic의 Naver/GA4/pytrends 점수화, 핫이슈 프롬프트,
+건강/금융 출처 블록 등)는 삭제했다 - 예전 발행글(docs/_posts의 한국어 글들)은
+그대로 남아있지만 새 글은 전부 이 새 니치/포맷으로 나간다.
+
+- data/topics.json 에 5개 클러스터(A~E) x 6개, 총 30개 키워드가 고정 풀로
+  들어있다. 매 실행마다 이 중 하나를 클러스터 가중치 기반 가중 무작위로
+  고른다 - 단순 How-to(클러스터 A/B)보다 트러블슈팅(D, 경쟁도 낮아 우선)과
+  비교/대안형(C/E, 광고 친화적이고 AI Overview에 덜 깎이는 검색 유형)을
+  더 자주 고르도록 클러스터별 가중치를 둔다 (select_niche_topic() 참고).
+  최근 사용한 주제 id는 data/used_topic_ids.json에 남겨서, 풀을 거의 다
+  돌기 전까지는 같은 주제가 다시 나오지 않게 한다.
 - 최근에 쓴 글 제목들을 함께 넘겨서 내용이 겹치지 않게 한다.
-- 정보성 글은 Claude의 web_search 도구를 켜서, 실제 검색 결과를 근거로
-  본문을 쓰게 한다 (모델의 사전 지식만으로 지어내지 않도록).
-- Claude API로 본문을 생성하고, docs/_posts/ 에 Jekyll 포스트 파일로 저장한다.
+- 포맷은 클러스터마다 다르게 정해져 있다: How-to(A/B), Alternative(C),
+  Troubleshoot(D), Comparison(E) - 각각 구조가 다른 프롬프트 빌더로 글을
+  쓴다 (build_how_to_prompt 등). 전부 Claude의 web_search 도구를 켜서,
+  실제 검색 결과(가격 페이지, 공식 지원문서 등)를 근거로 쓰고 그 출처
+  URL도 SOURCES 필드로 받는다 - 모델의 사전 지식만으로 지어내지 않도록.
+- Claude API로 본문(영어)을 생성하고, docs/_posts/ 에 Jekyll 포스트
+  파일로 저장한다.
 - 구글 Blogger API 인증 정보(GOOGLE_CLIENT_ID 등)가 설정되어 있으면,
   같은 글을 Blogger에도 동시에 자동 발행한다 (설정 안 돼 있으면 조용히 건너뜀).
-- UNSPLASH_ACCESS_KEY가 설정되어 있으면, 정보성 글에는 최대 5장(맨 위 1장 +
-  소제목마다 1장)의 무료 스톡 사진을 Unsplash에서 찾아 본문에 흩어 넣는다
-  (출처 표기 포함, 설정 안 돼 있으면 조용히 건너뜀). 제품 지정 발행 글은
-  실제 상품 이미지 1장을 그대로 쓴다.
-- 주제를 고를 때 단순 순환(FIFO)만 하지 않고, 큐 맨 앞의 10개 후보를 놓고
-  (1) Google 트렌드, (2) 네이버 데이터랩(검색어트렌드 공식 API)으로 최근
-  검색량이 높은지, (3) GA4에 이 블로그의 과거 인기글과 겹치는 주제인지
-  (조회수+체류시간 기준)를 함께 점수화해서 순위를 매긴 뒤, 매번 1위만
-  쓰지 않고 상위 3위 중 하나를 가중 무작위(1위가 더 자주 뽑히도록)로
-  골라 그 주제로 글을 쓴다. 세 신호 모두 선택 사항이며, 설정/조회가 안 되면
-  (NAVER_CLIENT_ID/SECRET, GA4_PROPERTY_ID/GA4_SERVICE_ACCOUNT_JSON
-  미설정, pytrends 조회 실패 등) 조용히 살아있는 신호만으로, 전부
-  실패하면 기존 큐 순서(FIFO) 그대로 동작한다 — 즉 이 기능이 없어도
-  전혀 문제 없이 발행된다.
-- 매주 수요일은 topics.txt 큐 대신 "정치" 핫이슈(미국/유럽/아시아/대한민국
-  중 실제로 화제인 곳)를, 매주 토요일은 경제/사회/심리/주식 중 하나(ISO
-  주차 기준 순환)를 web_search로 찾아서 다룬다 - 정치는 편향 시비 리스크가
-  커서 요일 고정으로 정확히 7일에 1일만 나가게 못박아 뒀다. 그 외 요일은
-  기존 니치(매트리스/건강/재무) 그대로 동작하고, 핫이슈 요일엔 topics.txt
-  큐를 건드리지 않는다 (hot_issue_category_for_today() 참고).
+- 이미지는 Unsplash 일반 스톡사진 대신, Claude가 SOURCES로 알려준 공식
+  페이지(가격/지원문서 등, 로그인 불필요)를 Playwright로 직접 캡처해서
+  쓴다 - "직접 제작/캡처/AI생성/명확한 라이선스만" 원칙상 소프트웨어
+  화면 캡처 자리에 무관한 스톡사진을 쓸 수 없어서다. 로그인이 필요하거나
+  캡처가 실패하면 그 자리는 조용히 건너뛰고, 캡처된 화면이 하나도 없을
+  때만 Unsplash 사진 1장을 대표 이미지로 대신 쓴다 (build_screenshot_photos
+  참고). 제품 지정 발행(manual, 현재는 쓰이지 않지만 기능은 남겨둠) 글은
+  기존처럼 Unsplash나 실제 제품 이미지를 그대로 쓴다.
+- 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후 매일 발행 대신 화/일을
+  휴무일로 두고 주 5회만 발행한다 (REST_WEEKDAYS).
 """
 
 import datetime
@@ -57,13 +60,18 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent
 # auto-blog-autopilot/ 의 형제 폴더인 docs/ (GitHub Pages 소스)
 DOCS_DIR = PROJECT_DIR.parent / "docs"
 
-TOPICS_FILE = PROJECT_DIR / "data" / "topics.txt"
+TOPICS_FILE = PROJECT_DIR / "data" / "topics.json"
+# 최근에 어떤 topics.json 항목(id)을 썼는지 남겨두는 상태 파일. select_niche_topic()
+# 참고 - 풀(30개)을 거의 다 돌기 전까지 같은 주제가 다시 나오지 않게 한다.
+USED_TOPIC_IDS_FILE = PROJECT_DIR / "data" / "used_topic_ids.json"
+USED_TOPIC_IDS_KEEP = 20
 POSTS_DIR = DOCS_DIR / "_posts"
 
 # 특정 제품(예: 쿠팡파트너스 딥링크가 있는 제품)에 대해 한 번만 글을 쓰고
-# 싶을 때 쓰는 수동 오버라이드 파일. 있으면 이번 실행은 평소 큐(topics.txt)를
-# 건드리지 않고 이 파일 내용으로만 글을 쓴 뒤, 다 쓰고 나면 파일을 지워서
-# 다음 실행부터는 다시 평소 큐로 돌아간다. 필수 키:
+# 싶을 때 쓰는 수동 오버라이드 파일 (현재는 새 니치와 맞는 제품이 없어 쓰이지
+# 않지만, 나중에 필요해질 수 있어 기능은 남겨둔다). 있으면 이번 실행은 평소
+# 큐(topics.json)를 건드리지 않고 이 파일 내용으로만 글을 쓴 뒤, 다 쓰고 나면
+# 파일을 지워서 다음 실행부터는 다시 평소 큐로 돌아간다. 필수 키:
 #   topic, product_name, product_info
 # 그리고 아래 둘 중 하나:
 #   - affiliate_url, affiliate_label (마크다운 링크로 삽입)
@@ -87,300 +95,68 @@ BLOGGER_BLOG_ID = os.environ.get("BLOGGER_BLOG_ID", "")
 UNSPLASH_ACCESS_KEY = os.environ.get("UNSPLASH_ACCESS_KEY", "")
 UNSPLASH_APP_NAME = os.environ.get("UNSPLASH_APP_NAME", "auto-blog-autopilot")
 
-GA4_PROPERTY_ID = os.environ.get("GA4_PROPERTY_ID", "")
-GA4_SERVICE_ACCOUNT_JSON = os.environ.get("GA4_SERVICE_ACCOUNT_JSON", "")
-
-NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
-NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
-
-CANDIDATE_POOL_SIZE = 10
-# 매일 검색량 1위만 쓰지 않고 1~3위 중 하나를 뽑는다 (순위가 높을수록 더
-# 자주 뽑히도록 가중치를 둔다 - 3:2:1). 후보가 3개 미만이면 있는 만큼만 쓴다.
-TOP_N_CHOICES = 3
-TOP_N_WEIGHTS = [3, 2, 1]
+# 클러스터별 발행 우선순위 가중치. "단순 How-to보다 비교/대안형 콘텐츠를
+# 우선한다"는 전략에 따라: D(트러블슈팅, 경쟁도 낮아 최우선) > C/E(비교·대안,
+# 광고 친화적이고 AI Overview 노출이 적은 구매의도 검색) > B(생산성/자동화,
+# 트렌드 일부 포함) > A(순수 실사용 가이드, AI Overview에 CTR이 가장 많이
+# 깎이는 단순 정보성 How-to라 가장 낮은 가중치).
+NICHE_CLUSTER_WEIGHT = {"A": 1, "B": 2, "C": 4, "D": 5, "E": 4}
 
 
-def get_next_topic() -> str:
-    """예전 방식(단순 FIFO 순환)의 주제 선택. 지금은 select_topic()이 대신
-    쓰이지만, 트렌드/GA4 조회가 전부 실패했을 때의 동작과 동일하므로 참고용으로
-    남겨둔다."""
+def load_niche_topics() -> list[dict]:
+    """data/topics.json의 고정 30개 키워드 풀을 읽어온다. 각 항목은
+    id/cluster/cluster_name/keyword/format/content_type을 갖는다."""
     if not TOPICS_FILE.exists():
-        sys.exit(f"주제 큐 파일이 없습니다: {TOPICS_FILE}")
-
-    lines = [line.strip() for line in TOPICS_FILE.read_text(encoding="utf-8").splitlines() if line.strip()]
-    if not lines:
-        sys.exit(f"주제 큐가 비어 있습니다: {TOPICS_FILE}")
-
-    topic = lines[0]
-    rotated = lines[1:] + [topic]
-    TOPICS_FILE.write_text("\n".join(rotated) + "\n", encoding="utf-8")
-    return topic
-
-
-def score_candidates_by_trends(candidates: list[str]) -> dict[str, float]:
-    """Google 트렌드(pytrends, 비공식/무료)로 최근 1개월 한국 검색 관심도를
-    후보별로 점수화한다. pytrends는 로그인/키 없이 쓸 수 있지만 비공식 API라
-    레이트리밋이나 스키마 변경에 취약하다 — 실패하면 빈 dict를 돌려주고
-    절대 예외를 전파하지 않는다 (검색량 순위 없이 계속 진행)."""
-    if not candidates:
-        return {}
-
+        sys.exit(f"주제 풀 파일이 없습니다: {TOPICS_FILE}")
     try:
-        from pytrends.request import TrendReq
-    except ImportError as e:
-        print(f"pytrends가 설치되어 있지 않아 검색량 기반 순위는 건너뜁니다: {e}")
-        return {}
-
-    kw_list = candidates[:5]  # pytrends는 한 번에 최대 5개 키워드까지만 비교 가능
-    try:
-        trends = TrendReq(hl="ko", tz=540)
-        trends.build_payload(kw_list, timeframe="today 1-m", geo="KR")
-        df = trends.interest_over_time()
-    except Exception as e:  # pytrends는 다양한 예외(HTTP, 파싱 등)를 던질 수 있음
-        print(f"Google 트렌드 조회 실패, 검색량 기반 순위 없이 계속합니다: {e}")
-        return {}
-
-    if df is None or df.empty:
-        return {}
-
-    scores = {}
-    for kw in kw_list:
-        if kw in df.columns:
-            scores[kw] = float(df[kw].mean())
-    return scores
+        topics = json.loads(TOPICS_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        sys.exit(f"주제 풀 파일이 올바른 JSON이 아닙니다: {TOPICS_FILE}: {e}")
+    if not isinstance(topics, list) or not topics:
+        sys.exit(f"주제 풀이 비어 있습니다: {TOPICS_FILE}")
+    return topics
 
 
-def naver_configured() -> bool:
-    return bool(NAVER_CLIENT_ID and NAVER_CLIENT_SECRET)
-
-
-def score_candidates_by_naver_datalab(candidates: list[str]) -> dict[str, float]:
-    """네이버 데이터랩 "검색어트렌드" 공식 오픈 API로 최근 1개월간 한국 검색
-    관심도를 후보별로 점수화한다. 개인 계정 로그인 세션이 아니라, 네이버
-    개발자센터(developers.naver.com)에서 앱 하나 등록하면 받는 Client ID/
-    Secret만 쓰는 공식 REST API다 (Unsplash 키 발급과 비슷한 난이도).
-    한국 사용자 기준으로는 Google 트렌드보다 이 신호가 더 정확한 편이라
-    같이 참고한다. 미설정이거나 조회가 실패하면 빈 dict를 돌려주고
-    절대 예외를 전파하지 않는다 (이 신호 없이 계속 진행)."""
-    if not naver_configured() or not candidates:
-        return {}
-
-    try:
-        import requests
-    except ImportError as e:
-        print(f"requests가 설치되어 있지 않아 네이버 데이터랩 조회를 건너뜁니다: {e}")
-        return {}
-
-    kw_list = candidates[:5]  # 데이터랩 검색어트렌드는 그룹 최대 5개까지 비교 가능
-    end_date = datetime.date.today()
-    start_date = end_date - datetime.timedelta(days=30)
-    body = {
-        "startDate": start_date.isoformat(),
-        "endDate": end_date.isoformat(),
-        "timeUnit": "date",
-        "keywordGroups": [{"groupName": kw, "keywords": [kw]} for kw in kw_list],
-    }
-    try:
-        resp = requests.post(
-            "https://openapi.naver.com/v1/datalab/search",
-            headers={
-                # 이 엔드포인트(openapi.naver.com)는 네이버 개발자센터
-                # (developers.naver.com)에서 발급하는 고전 방식 Client ID/
-                # Secret을 그대로 X-Naver-Client-Id/Secret 헤더로 보내야 한다.
-                # 한때 NCP APIGW 전용 헤더(X-NCP-APIGW-API-KEY-ID 등)로 바꿨던
-                # 적이 있는데, 그건 이 도메인(openapi.naver.com)이 아니라
-                # NCP APIGW가 서비스하는 별도 도메인(*.apigw.ntruss.com)에서만
-                # 통하는 헤더라 잘못된 조합이었다 - 실제로 계속 401이 났다.
-                # README(7-2)도 developers.naver.com 앱 등록 기준으로 안내하고
-                # 있으므로, 발급받은 키도 이 고전 방식 Client ID/Secret이 맞다.
-                "X-Naver-Client-Id": NAVER_CLIENT_ID,
-                "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
-                "Content-Type": "application/json",
-            },
-            data=json.dumps(body),
-            timeout=30,
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-    except Exception as e:
-        print(f"네이버 데이터랩 조회 실패, 이 신호 없이 계속합니다: {e}")
-        return {}
-
-    scores = {}
-    for result in payload.get("results", []):
-        group_name = result.get("title", "")
-        data_points = result.get("data") or []
-        if data_points:
-            avg_ratio = sum(p.get("ratio", 0) for p in data_points) / len(data_points)
-            scores[group_name] = avg_ratio
-    return scores
-
-
-def ga4_configured() -> bool:
-    return bool(GA4_PROPERTY_ID and GA4_SERVICE_ACCOUNT_JSON)
-
-
-def fetch_ga4_top_pages(days: int = 28) -> list[dict]:
-    """최근 N일간 이 블로그(GitHub Pages)의 GA4 데이터에서 조회수 상위 글들을
-    (조회수, 평균 체류시간)과 함께 가져온다. 서비스 계정 인증에 필요한
-    google-auth만 쓰고, 무거운 공식 google-analytics-data 클라이언트(grpc/
-    protobuf 포함)는 쓰지 않는다 — REST API를 직접 호출한다.
-    설정이 없거나 인증/조회가 실패하면 빈 리스트를 돌려주고 절대 예외를
-    전파하지 않는다 (GA4 데이터 없이 트렌드만으로, 또는 기존 순환으로 계속
-    진행). 데이터가 아직 쌓이지 않은 초기 몇 주간은 항상 빈 리스트가 정상이다."""
-    if not ga4_configured():
+def load_used_topic_ids() -> list[str]:
+    if not USED_TOPIC_IDS_FILE.exists():
         return []
-
     try:
-        from google.oauth2 import service_account
-        from google.auth.transport.requests import Request
-        import requests
-    except BaseException as e:
-        # 일부 환경에서는 google-auth가 의존하는 cryptography 패키지가
-        # 시스템에 이미 깔린(apt 등) 다른 버전과 충돌해 ImportError가 아니라
-        # PyO3 쪽 PanicException(BaseException 계열, 일반 Exception으로도 못 잡힘)을
-        # 던지는 경우가 있다. GA4는 어디까지나 선택 기능이라 이런 경우에도
-        # 전체 발행이 죽으면 안 되므로 BaseException까지 넓게 잡아 건너뛴다.
-        print(f"GA4 연동에 필요한 패키지를 불러오지 못해 건너뜁니다: {e}")
+        ids = json.loads(USED_TOPIC_IDS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
         return []
-
-    try:
-        info = json.loads(GA4_SERVICE_ACCOUNT_JSON)
-        credentials = service_account.Credentials.from_service_account_info(
-            info, scopes=["https://www.googleapis.com/auth/analytics.readonly"]
-        )
-        credentials.refresh(Request())
-    except Exception as e:
-        print(f"GA4 인증 실패, GA4 데이터 없이 계속합니다: {e}")
-        return []
-
-    property_id = GA4_PROPERTY_ID if GA4_PROPERTY_ID.isdigit() else GA4_PROPERTY_ID.replace("properties/", "")
-    url = f"https://analyticsdata.googleapis.com/v1beta/properties/{property_id}:runReport"
-    body = {
-        "dateRanges": [{"startDate": f"{days}daysAgo", "endDate": "today"}],
-        "dimensions": [{"name": "pageTitle"}],
-        "metrics": [{"name": "screenPageViews"}, {"name": "userEngagementDuration"}],
-        "orderBys": [{"metric": {"metricName": "screenPageViews"}, "desc": True}],
-        "limit": 20,
-    }
-    try:
-        resp = requests.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {credentials.token}",
-                "Content-Type": "application/json",
-            },
-            data=json.dumps(body),
-            timeout=30,
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-    except Exception as e:
-        print(f"GA4 리포트 조회 실패, GA4 데이터 없이 계속합니다: {e}")
-        return []
-
-    rows = payload.get("rows") or []
-    results = []
-    for row in rows:
-        try:
-            title = row["dimensionValues"][0]["value"]
-            pageviews = float(row["metricValues"][0]["value"])
-            engagement = float(row["metricValues"][1]["value"])
-            results.append({"title": title, "pageviews": pageviews, "engagement_seconds": engagement})
-        except (KeyError, IndexError, ValueError):
-            continue
-    return results
+    return ids if isinstance(ids, list) else []
 
 
-def score_candidates_by_ga4(candidates: list[str], ga4_pages: list[dict]) -> dict[str, float]:
-    """GA4 인기글 제목과 후보 주제 문자열 사이의 단어 겹침으로, 각 후보가
-    "과거에 실제로 조회수+체류시간이 좋았던 주제"와 얼마나 비슷한지 점수화한다.
-    (GA4 페이지 제목은 Jekyll의 `{{ page.title }} · {{ site.title }}` 형식이라
-    완전 일치는 기대하지 않고, 어디까지나 근사치 힌트로만 쓴다.)"""
-    if not ga4_pages:
-        return {}
-
-    max_pv = max((p["pageviews"] for p in ga4_pages), default=0) or 1
-    max_eng = max((p["engagement_seconds"] for p in ga4_pages), default=0) or 1
-
-    scores = {c: 0.0 for c in candidates}
-    for page in ga4_pages:
-        title_tokens = set(re.findall(r"[가-힣A-Za-z0-9]+", page["title"]))
-        pv_norm = page["pageviews"] / max_pv
-        eng_norm = page["engagement_seconds"] / max_eng
-        page_score = pv_norm * 0.5 + eng_norm * 0.5  # 조회수와 체류시간을 절반씩 반영
-        for candidate in candidates:
-            cand_tokens = set(re.findall(r"[가-힣A-Za-z0-9]+", candidate))
-            overlap = len(title_tokens & cand_tokens)
-            if overlap:
-                scores[candidate] += overlap * page_score
-    return scores
+def save_used_topic_id(topic_id: str) -> None:
+    """이번에 고른 주제 id를 사용 기록에 남긴다. USED_TOPIC_IDS_KEEP개를
+    넘으면 오래된 것부터 잘라내서, 풀(30개)을 거의 다 돌면 다시 등장할
+    수 있게 한다 (영구히 다시 안 나오게 막지 않는다 - 결국 콘텐츠는
+    새로고침이 필요해질 수 있어서)."""
+    used = load_used_topic_ids()
+    used = [i for i in used if i != topic_id] + [topic_id]
+    used = used[-USED_TOPIC_IDS_KEEP:]
+    USED_TOPIC_IDS_FILE.write_text(json.dumps(used, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def select_topic() -> str:
-    """큐 맨 앞 CANDIDATE_POOL_SIZE(10)개 후보를 놓고 검색량(Google 트렌드,
-    네이버 데이터랩)과 자체 유입량/체류시간(GA4)을 함께 점수화해서 순위를
-    매긴 뒤, 매번 1위만 쓰지 않고 상위 TOP_N_CHOICES(3)위 중 하나를
-    가중 무작위로 골라 그 주제로 글을 쓴다(순위가 높을수록 더 자주
-    뽑힘 - TOP_N_WEIGHTS). 선택된 주제만 큐 맨 뒤로 돌리고 나머지 후보는
-    그대로 앞쪽에 남겨서, 이번에 밀린 후보들이 다음날 다시 후보 풀에
-    들어가게 한다. 세 신호가 전부 실패/미설정이면 기존 FIFO와 동일한
-    순서를 순위로 쓰고(그 안에서도 상위 3개 중 하나를 무작위로 고름),
-    일부만 살아있으면 살아있는 신호만 동일 가중치로 평균 낸다(신호가
-    적다고 순위가 왜곡되지 않도록)."""
-    if not TOPICS_FILE.exists():
-        sys.exit(f"주제 큐 파일이 없습니다: {TOPICS_FILE}")
+def select_niche_topic() -> dict:
+    """topics.json 30개 중 하나를 클러스터 가중치(NICHE_CLUSTER_WEIGHT) 기반
+    가중 무작위로 고른다. 최근에 쓴 주제(used_topic_ids.json)는 먼저
+    제외하고 고르되, 풀을 거의 다 써서 후보가 하나도 안 남으면 전체
+    풀에서 다시 고른다(콘텐츠는 결국 새로고침할 수 있으니 영구 배제는
+    아니다). 선택한 주제의 id는 main()이 발행에 성공한 뒤에
+    save_used_topic_id()로 기록한다(여기서는 기록하지 않는다 - 실패한
+    회차까지 "사용됨"으로 남으면 안 되므로)."""
+    topics = load_niche_topics()
+    used_ids = set(load_used_topic_ids())
 
-    lines = [line.strip() for line in TOPICS_FILE.read_text(encoding="utf-8").splitlines() if line.strip()]
-    if not lines:
-        sys.exit(f"주제 큐가 비어 있습니다: {TOPICS_FILE}")
-
-    pool_size = min(CANDIDATE_POOL_SIZE, len(lines))
-    candidates = lines[:pool_size]
-
-    trend_scores = score_candidates_by_trends(candidates)
-    naver_scores = score_candidates_by_naver_datalab(candidates)
-    ga4_pages = fetch_ga4_top_pages()
-    ga4_scores = score_candidates_by_ga4(candidates, ga4_pages)
-
-    def normalize(d: dict[str, float]) -> dict[str, float]:
-        if not d:
-            return {}
-        max_v = max(d.values()) or 1
-        return {k: v / max_v for k, v in d.items()}
-
-    available_signals = [
-        normalize(s) for s in (trend_scores, naver_scores, ga4_scores) if s
-    ]
-
-    if available_signals:
-        combined = {
-            c: sum(sig.get(c, 0.0) for sig in available_signals) / len(available_signals)
-            for c in candidates
-        }
-        ranked = sorted(candidates, key=lambda c: combined[c], reverse=True)
-    else:
-        ranked = list(candidates)  # 신호가 전부 실패하면 기존 큐 순서(FIFO) 그대로
-
-    print(f"오늘의 주제 후보 순위 (1~{len(ranked)}위):")
-    for i, c in enumerate(ranked, start=1):
-        print(
-            f"  {i}위: {c}  "
-            f"(구글트렌드={trend_scores.get(c, 0.0):.1f}, "
-            f"네이버데이터랩={naver_scores.get(c, 0.0):.1f}, "
-            f"GA4={ga4_scores.get(c, 0.0):.2f})"
-        )
-
-    top_n = ranked[:TOP_N_CHOICES]
-    weights = TOP_N_WEIGHTS[: len(top_n)]
-    topic = random.choices(top_n, weights=weights, k=1)[0]
-    print(f"-> 오늘 선택: {top_n.index(topic) + 1}위 '{topic}' (상위 {len(top_n)}개 중 가중 무작위 선택)")
-
-    remaining = [line for line in lines if line != topic]
-    rotated = remaining + [topic]
-    TOPICS_FILE.write_text("\n".join(rotated) + "\n", encoding="utf-8")
-
-    return topic
+    candidates = [t for t in topics if t["id"] not in used_ids] or topics
+    weights = [NICHE_CLUSTER_WEIGHT.get(t["cluster"], 1) for t in candidates]
+    chosen = random.choices(candidates, weights=weights, k=1)[0]
+    print(
+        f"오늘의 주제 선택: [{chosen['cluster']}] {chosen['cluster_name']} / "
+        f"{chosen['keyword']} (포맷: {chosen['format']})"
+    )
+    return chosen
 
 
 def _validate_manual_item(data: dict) -> bool:
@@ -409,7 +185,7 @@ def load_manual_topic() -> dict | None:
     2. MANUAL_TOPIC_FILE (단건 오버라이드) — 이번 실행에 한 번만 쓰고 파일을 지운다.
 
     둘 다 없거나 형식이 잘못됐으면 None을 돌려준다 (이 경우 평소처럼
-    select_topic() 큐를 그대로 쓴다). 실제 삭제/재기록은 main()에서
+    select_niche_topic() 풀을 그대로 쓴다). 실제 삭제/재기록은 main()에서
     발행이 끝난 뒤에 한다(consume_manual_topic 참고) — 여기서는 읽기만 한다.
     """
     if MANUAL_TOPIC_QUEUE_FILE.exists():
@@ -490,177 +266,19 @@ def slugify(text: str) -> str:
     return text[:60] or "post"
 
 
-def build_prompt(topic: str, recent_titles: list[str]) -> str:
-    avoid_block = ""
-    if recent_titles:
-        recent_list = "\n".join(f"- {t}" for t in recent_titles)
-        avoid_block = f"\n최근에 이미 다룬 제목들이니 내용/각도가 겹치지 않게 새로운 관점으로 써줘:\n{recent_list}\n"
-
-    finance_guard = ""
-    if _is_finance_related(topic, ""):
-        finance_guard = (
-            "\n이 주제는 보험/금융/렌탈처럼 규제가 있는 분야야. 특정 보험료·금리·수수료 "
-            "숫자나 '최근 몇 %로 인상' 같은 시점이 걸린 사실을 단정적으로 쓰지 말고, "
-            "일반적인 원칙과 체크리스트, 확인해야 할 항목 위주로 써줘. 특정 보험사·금융사 "
-            "상품을 추천하거나 가입을 유도하는 표현은 쓰지 말고, 최신 정확한 조건은 "
-            "공식 출처에서 확인하라고 자연스럽게 안내해줘 (본문 끝에 별도로 출처 링크가 "
-            "자동으로 붙으니 본문에서 직접 링크를 만들 필요는 없어).\n"
-        )
-
-    health_guard = ""
-    if _is_health_related(topic, ""):
-        health_guard = (
-            "\n이 주제는 건강/수면/영양제/질병처럼 의료광고 규제가 있는 분야야. "
-            "특정 질환을 진단하거나 '이렇게 하면 낫는다/치료된다' 같은 단정적 표현은 "
-            "쓰지 말고, 특정 영양제·의약품 브랜드를 추천하지 마. 일반적으로 알려진 "
-            "공공 보건 정보와 생활 습관 위주로 쓰고, 증상이 있거나 걱정되면 의사·약사와 "
-            "상담하라고 자연스럽게 안내해줘 (본문 끝에 별도로 출처 링크가 자동으로 "
-            "붙으니 본문에서 직접 링크를 만들 필요는 없어).\n"
-        )
-
-    web_search_guard = (
-        "\n먼저 web_search 도구로 이 주제에 대한 최신 정확한 정보를 1~2회 검색해서 "
-        "확인한 뒤에 써줘. 검색 과정이나 '검색해보겠습니다' 같은 설명은 최종 답변에 "
-        "쓰지 말고, 검색으로 확인한 사실만 자연스럽게 녹여서 바로 아래 형식으로만 "
-        "답해줘.\n"
-    )
-
-    return f"""오늘의 주제: {topic}
-{avoid_block}{finance_guard}{health_guard}{web_search_guard}
-아래 형식을 정확히 지켜서 한국어 블로그 글을 작성해줘.
-
-TITLE: (SEO에 좋은 구체적인 제목, 30자 내외, 과장/낚시성 문구 금지)
-TAGS: (쉼표로 구분된 태그 3~5개)
-KEYWORD: (이 글의 핵심 소재를 나타내는 키워드 1개, 예: "매트리스 관리")
-IMAGE_QUERY: (이 글에 어울리는 사진을 찾기 위한 영어 검색어 2~4단어,
-  구체적인 장면 위주로. 예: "cozy bedroom morning", "clean bedding sunlight")
----
-(본문 마크다운. 2000~2500자 분량. 소제목(##) 3~5개.
-실용적인 정보 위주로 쓰고, 각 소제목마다 체크리스트·구체적 기준·비교 포인트 중
-하나 이상을 목록이나 표로 정리해서 정보 밀도를 높여. 검색으로 확인되지 않은
-사실이나 과장된 효능·수익 약속은 절대 쓰지 마. 말투는 자연스러운 존댓말
-블로그 톤으로.)
-"""
-
-
 # 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후, 매일 발행 대신 발행 빈도를
 # 줄이고 글 하나의 완성도를 높이기로 했다. 화요일/일요일은 발행을 건너뛴다
-# (월/수(정치)/목/금/토(경제 등) 주 5회 발행). 요일 고정이라 별도 상태
-# 파일 없이 재실행해도 같은 결과가 나온다.
+# (주 5회 발행). 요일 고정이라 별도 상태 파일 없이 재실행해도 같은
+# 결과가 나온다.
 REST_WEEKDAYS = (1, 6)  # 화요일=1, 일요일=6
-
-HOT_ISSUE_CATEGORIES = ("경제", "사회", "심리", "주식")
-HOT_ISSUE_REGIONS = "미국, 유럽, 아시아, 대한민국"
-
-# 핫이슈 글의 IMAGE_QUERY는 그날 구체적인 이슈에 맞춰 AI가 즉석에서 지어내는
-# 영어 문구라, Unsplash에 검색 결과가 아예 없는 경우가 정보성 글보다 잦다
-# (실제로 확인됨). 검색 결과가 없으면 카테고리 단위의 무난한 대체 검색어로
-# 한 번 더 시도한다.
-HOT_ISSUE_FALLBACK_IMAGE_QUERY = {
-    "정치": "government building flags",
-    "경제": "city skyline finance",
-    "사회": "city street crowd",
-    "심리": "person thinking window",
-    "주식": "stock market chart screen",
-}
-
-
-def hot_issue_category_for_today(today: datetime.date | None = None) -> str | None:
-    """오늘(KST)이 핫이슈 요일이면 다룰 카테고리를, 아니면 None을 돌려준다.
-
-    - 수요일: 정치 (편향성 시비 리스크가 커서 7일에 1일로 못박아 둔다 -
-      요일 고정이라 주 1회가 보장되고, 로그로도 바로 확인된다).
-    - 토요일: 경제/사회/심리/주식 중 하나를 ISO 주차 기준으로 순환한다
-      (그 주에 어떤 카테고리인지 결정적으로 정해져서, 재실행해도 같은
-      결과가 나온다 - 별도 상태 파일이 필요 없다).
-    - 그 외 요일: 기존 니치(매트리스/건강/재무) 그대로, None을 돌려준다.
-    """
-    if today is None:
-        today = datetime.date.today()
-    weekday = today.weekday()  # 월요일=0 ... 일요일=6
-    if weekday == 2:  # 수요일
-        return "정치"
-    if weekday == 5:  # 토요일
-        iso_week = today.isocalendar()[1]
-        return HOT_ISSUE_CATEGORIES[iso_week % len(HOT_ISSUE_CATEGORIES)]
-    return None
-
-
-def build_hot_issue_prompt(category: str, recent_titles: list[str]) -> str:
-    """정치/경제/사회/심리/주식 핫이슈 글용 프롬프트. build_prompt()와 달리
-    미리 정해둔 주제 문장이 없고, web_search로 실제 최근 이슈를 찾아서
-    그걸 소재로 쓰게 한다 - 지어낸 뉴스가 아니라 실제 있었던 일이어야
-    하므로 검색이 선택이 아니라 필수다."""
-    avoid_block = ""
-    if recent_titles:
-        recent_list = "\n".join(f"- {t}" for t in recent_titles)
-        avoid_block = f"\n최근에 이미 다룬 제목들이니 같은 이슈를 반복하지 마:\n{recent_list}\n"
-
-    if category == "정치":
-        guard = (
-            "\n정치 이슈는 편향 시비가 나기 가장 쉬운 주제야. 특정 정당·정치인·진영을 "
-            "지지하거나 비판하는 표현, 단정적 가치 판단은 절대 쓰지 마. 여러 입장이 "
-            "있는 사안이면 주요 입장을 균형 있게 소개하고, 사실(누가 무엇을 했다/발표했다)과 "
-            "해석·전망을 명확히 구분해서 써. '충격', '경악' 같은 자극적 수식어도 쓰지 마.\n"
-        )
-    elif category in ("주식", "증권", "증시"):
-        guard = (
-            "\n주식/증시 이슈는 자본시장법상 투자자문업 등록 없이 특정 종목의 매수·매도를 "
-            "권유하면 안 되는 분야야. '지금 사라/팔아라', '오를 것이다/떨어질 것이다' 같은 "
-            "단정적 전망이나 특정 종목 추천은 절대 쓰지 말고, 무슨 일이 있었는지(발표·지표· "
-            "이벤트)와 시장이 왜 그렇게 반응했는지 설명하는 데 집중해. 본문 끝에 투자 유의 "
-            "안내가 자동으로 붙으니 본문에서 직접 투자를 권유하는 문장은 쓰지 마.\n"
-        )
-    else:
-        guard = (
-            "\n확인되지 않은 추측이나 소문을 사실처럼 쓰지 말고, 실제 발표·통계·사건 위주로 써. "
-            "특정 집단을 비하하거나 자극적으로 단정하는 표현은 쓰지 마.\n"
-        )
-
-    web_search_guard = (
-        f"\n먼저 web_search 도구로 최근 1주일 이내 {HOT_ISSUE_REGIONS} 중 한 곳에서 "
-        f"'{category}' 분야에서 실제로 있었던, 사람들이 관심 가질 만한 이슈를 찾아봐 "
-        "(여러 지역 후보를 검토해서, 그중 가장 화제성이 크고 근거가 분명한 이슈 하나를 "
-        "골라). 검색으로 확인 안 된 내용은 쓰지 말고, 검색 과정 설명 없이 확인한 사실만 "
-        "자연스럽게 녹여서 바로 아래 형식으로만 답해줘.\n"
-    )
-
-    return f"""오늘 다룰 핫이슈 분야: {category} (대상 지역: {HOT_ISSUE_REGIONS} 중 실제로 화제인 곳)
-{avoid_block}{guard}{web_search_guard}
-아래 형식을 정확히 지켜서 한국어 블로그 글을 작성해줘.
-
-TITLE: (실제 이슈를 구체적으로 담은 제목, 30자 내외, 과장/낚시성 문구 금지)
-TAGS: (쉼표로 구분된 태그 3~5개, 관련 지역명과 "{category}" 포함)
-KEYWORD: (이 이슈의 핵심 소재를 나타내는 키워드 1개)
-IMAGE_QUERY: (이 글에 어울리는 사진을 찾기 위한 영어 검색어 2~4단어,
-  특정 인물 초상보다는 상징적인 장면 위주로. 예: "stock market chart screen",
-  "city skyline finance district")
----
-(본문 마크다운. 2000~2500자 분량. 소제목(##) 3~5개 - 예: "무슨 일이 있었나",
-"왜 중요한가", "숫자로 보면", "앞으로 지켜볼 점" 같은 구성. 실제 검색으로
-확인한 사실 위주로 쓰고, 어느 기관·매체 발표인지 자연스럽게 언급해. 배경
-설명이나 관련 수치를 더 채워서 얕게 훑고 지나가지 않게 써. 말투는 자연스러운
-존댓말 블로그 톤으로.)
-"""
-
-
-def build_hot_issue_disclaimer_block() -> str:
-    """핫이슈 글은 매트리스 관리법 같은 상록(常綠) 정보와 달리 시점에 따라
-    내용이 금방 바뀔 수 있어서, 정보성/건강/금융 출처 블록과 별개로 이
-    프레시니스 고지를 항상 붙인다."""
-    return (
-        "\n\n---\n\n"
-        "*이 글은 작성 시점을 기준으로 확인된 내용을 정리한 것으로, 이후 상황이 "
-        "바뀌었을 수 있습니다. 최신 내용은 원 발표·보도를 직접 확인하시기 바랍니다.*\n"
-    )
 
 
 def build_product_prompt(manual: dict, recent_titles: list[str]) -> str:
     """load_manual_topic()으로 받은 특정 제품 정보를 바탕으로 글을 쓰게 하는
-    프롬프트. build_prompt()와 형식(TITLE/TAGS/IMAGE_QUERY/본문)은 같지만,
-    KEYWORD 대신 이미 정해진 제휴 링크를 쓰므로 KEYWORD는 요구하지 않고,
-    실제 제품 사실(product_info)만 근거로 쓰고 그 외 숫자는 지어내지
-    말라고 명시한다."""
+    프롬프트 (현재는 새 니치와 맞는 제품이 없어 쓰이지 않지만 기능은
+    남겨둔다). TITLE/TAGS/IMAGE_QUERY/본문 형식이며, KEYWORD 대신 이미
+    정해진 제휴 링크를 쓰므로 KEYWORD는 요구하지 않고, 실제 제품 사실
+    (product_info)만 근거로 쓰고 그 외 숫자는 지어내지 말라고 명시한다."""
     avoid_block = ""
     if recent_titles:
         recent_list = "\n".join(f"- {t}" for t in recent_titles)
@@ -703,9 +321,17 @@ def call_claude(prompt: str, enable_web_search: bool = False) -> str:
         max_tokens=6000 if enable_web_search else 4096,
         output_config={"effort": "medium"},
         system=(
-            "너는 한국어 생활정보 블로그의 자동 발행 시스템에서 콘텐츠를 작성하는 담당자다. "
-            "사실에 기반해서 쓰고, 과장 광고나 확정적인 효과·수익 약속은 절대 하지 않으며, "
-            "자연스러운 문체로 작성한다."
+            "You are the writer for an automated English-language blog about "
+            "AI-powered productivity tools, software alternatives/comparisons, "
+            "and remote-work tool troubleshooting, aimed at a US audience. "
+            "Write in natural, native-sounding American English - never a stiff "
+            "or translated tone. Base every claim on verified facts (use web "
+            "search for anything time-sensitive like pricing, plans, or feature "
+            "availability); never invent numbers, features, or pricing. Never "
+            "copy or closely paraphrase another blog, article, or review site - "
+            "synthesize your own original explanation from what you find. Do "
+            "not pad the post with filler just to hit a word count; be concise "
+            "and useful."
         ),
         messages=[{"role": "user", "content": prompt}],
     )
@@ -784,164 +410,171 @@ def parse_output(text: str, fallback_title: str = "") -> tuple[str, str, str, st
     return title, tags, keyword, image_query, body
 
 
-def build_affiliate_block(keyword: str) -> str:
-    if not keyword:
-        return ""
+def parse_niche_output(text: str, fallback_title: str = "") -> tuple[str, str, str, list[str], str]:
+    """새 니치(AI Productivity Tools) 포맷 프롬프트(build_how_to_prompt 등)의
+    출력을 파싱한다. parse_output()과 같은 관대한 필드 매칭을 쓰되, KEYWORD
+    대신 SOURCES(파이프로 구분된 공식 출처 URL 목록)를 추가로 받는다 - 이
+    URL들은 본문 인용 출처이자 스크린샷 캡처 대상으로 같이 쓰인다
+    (build_screenshot_photos 참고)."""
+    title = _find_field(text, "TITLE") or fallback_title or "Untitled Post"
+    tags = _find_field(text, "TAGS")
+    keyword = _find_field(text, "KEYWORD")
+    sources_raw = _find_field(text, "SOURCES")
+    sources = [s.strip() for s in re.split(r"[|,]", sources_raw) if s.strip().lower().startswith("http")]
 
-    query = keyword.replace(" ", "+")
-    # NOTE: 아래는 단순 검색 링크입니다 (수익화 안 됨).
-    # 실제로 수익이 붙게 하려면 쿠팡파트너스 대시보드에서
-    # 이 키워드로 "딥링크"를 생성해서 이 URL을 주기적으로 교체해야 합니다.
-    return (
-        "\n\n---\n\n"
-        f'🔗 관련 상품 보러가기: [쿠팡에서 "{keyword}" 검색하기]'
-        f"(https://www.coupang.com/np/search?q={query})\n\n"
-        "*(쿠팡파트너스 활동의 일환으로, 위 링크를 통해 상품을 구매하실 경우 "
-        "일정액의 수수료를 제공받을 수 있습니다.)*\n"
-    )
+    anchor = 0
+    for label in ("SOURCES", "KEYWORD", "TAGS", "TITLE"):
+        match = _find_field_match(text, label)
+        if match:
+            anchor = match.end()
+            break
 
-
-# 보험/금융/렌탈처럼 규제가 있는 주제는, 쿠팡처럼 아무 링크나 수익화 링크로
-# 바꿀 수 없다. 보험 상품 가입을 유도하며 수수료를 받는 행위는 보험업법상
-# 등록된 보험설계사·GA(법인보험대리점)만 할 수 있어서, 이 자동화가 임의로
-# 그런 링크를 만들지 않는다. 대신 실제 정보를 확인할 수 있는 공신력 있는
-# 공식 출처 링크만 안내한다 (수수료 없음, 순수 정보 제공 목적).
-#
-# 나중에 실제로 합법적인 제휴 채널(예: 대출비교 플랫폼의 블로거 파트너스
-# 프로그램 등)에 가입하게 되면, build_affiliate_block()과 같은 패턴으로
-# "이 링크로 이용 시 수수료를 받습니다" 안내문과 함께 실제 제휴 링크를
-# 이 블록에 추가하면 된다.
-FINANCE_KEYWORDS = (
-    "보험", "금융", "렌탈", "렌트", "대출", "카드", "금리", "이자",
-    "신용점수", "신용", "적금", "예금", "연금",
-    "주식", "증시", "코스피", "코스닥", "나스닥", "증권", "투자", "환율",
-)
-
-FINANCE_DEFAULT_LINKS = [
-    ("금융감독원 금융소비자정보포털 파인", "https://fine.fss.or.kr"),
-]
-
-FINANCE_CATEGORY_LINKS = {
-    "보험": [("보험다모아 (생명·손해보험협회 공동 보험료 비교공시)", "https://e-insmarket.or.kr")],
-    "렌탈": [("한국소비자원 (렌탈 계약·피해예방 정보)", "https://www.kca.go.kr")],
-    "렌트": [("한국소비자원 (렌탈 계약·피해예방 정보)", "https://www.kca.go.kr")],
-    "주식": [
-        ("금융감독원 전자공시시스템 DART", "https://dart.fss.or.kr"),
-        ("한국거래소(KRX) 정보데이터시스템", "https://data.krx.co.kr"),
-    ],
-    "증시": [
-        ("금융감독원 전자공시시스템 DART", "https://dart.fss.or.kr"),
-        ("한국거래소(KRX) 정보데이터시스템", "https://data.krx.co.kr"),
-    ],
-}
-
-
-def _is_finance_related(topic: str, tags: str) -> bool:
-    haystack = f"{topic} {tags}"
-    return any(kw in haystack for kw in FINANCE_KEYWORDS)
-
-
-def build_finance_sources_block(topic: str, tags: str) -> str:
-    """보험/금융/렌탈 등 주제일 때, 실제 정보를 상세히 확인할 수 있는
-    공식·공신력 있는 출처 링크를 본문 끝에 덧붙인다. 수수료 없는 순수
-    정보 제공 블록이다 (위 모듈 설명 참고). 해당 주제가 아니면 빈
-    문자열을 돌려주고, 절대 예외를 일으키지 않는다."""
-    if not _is_finance_related(topic, tags):
-        return ""
-
-    haystack = f"{topic} {tags}"
-    links = list(FINANCE_DEFAULT_LINKS)
-    for kw, extra_links in FINANCE_CATEGORY_LINKS.items():
-        if kw in haystack:
-            links.extend(extra_links)
-
-    seen = set()
-    unique_links = []
-    for name, url in links:
-        if url not in seen:
-            seen.add(url)
-            unique_links.append((name, url))
-
-    lines = ["\n\n---\n", "**📌 더 정확한 정보가 필요하다면 아래 공식 출처에서 확인하세요:**\n"]
-    for name, url in unique_links:
-        lines.append(f"- [{name}]({url})")
-    if any(kw in haystack for kw in ("주식", "증시", "코스피", "코스닥", "나스닥", "증권", "투자")):
-        lines.append(
-            "\n*이 글은 정보 제공을 목적으로 하며 특정 종목의 매수·매도를 "
-            "권유하지 않습니다. 투자 판단과 그 결과에 대한 책임은 투자자 "
-            "본인에게 있으니, 위 공식 출처와 증권사 리서치 등을 통해 직접 "
-            "확인하시기 바랍니다.*\n"
-        )
+    separator = re.search(r"^[ \t]*-{3,}[ \t]*$", text[anchor:], re.MULTILINE)
+    if separator:
+        body = text[anchor + separator.end():].strip()
     else:
-        lines.append(
-            "\n*이 글은 정보 제공을 목적으로 하며, 실제 상품 가입 전 반드시 "
-            "위 공식 출처나 해당 상품 판매사를 통해 최신 조건을 확인하시기 바랍니다.*\n"
-        )
-    return "\n".join(lines)
+        body = text[anchor:].strip() if anchor else text.strip()
+
+    return title, tags, keyword, sources, body
 
 
-# 건강/수면/영양제/질병처럼 의료광고법·건강기능식품법이 걸리는 주제도 보험/금융과
-# 같은 이유로 조심해서 다룬다: 특정 질환의 진단·치료 효과를 단정하거나 특정
-# 영양제·의약품을 추천하면 안 되고(무자격 의료광고), 일반적인 정보와 병원/약사
-# 상담을 권하는 안내 위주로 써야 한다. 수수료가 붙는 링크가 아니라, 공신력 있는
-# 공공기관 출처만 안내한다.
-HEALTH_KEYWORDS = (
-    "건강", "질병", "질환", "증상", "영양제", "영양소", "비타민",
-    "수면", "불면", "코골이", "수면무호흡", "알레르기", "비염", "아토피",
-    "허리", "디스크", "관절", "통증", "면역",
-)
-
-HEALTH_DEFAULT_LINKS = [
-    ("질병관리청 국가건강정보포털", "https://health.kdca.go.kr"),
-]
-
-HEALTH_CATEGORY_LINKS = {
-    "영양제": [("식품안전나라 (식약처 건강기능식품 정보)", "https://www.foodsafetykorea.go.kr")],
-    "영양소": [("식품안전나라 (식약처 건강기능식품 정보)", "https://www.foodsafetykorea.go.kr")],
-    "비타민": [("식품안전나라 (식약처 건강기능식품 정보)", "https://www.foodsafetykorea.go.kr")],
-}
+# 4개 포맷 프롬프트 빌더가 공통으로 요구하는 출력 필드 형식. TITLE/TAGS/
+# KEYWORD는 예전 포맷과 같은 자리에, SOURCES(파이프로 구분된 실제 인용
+# URL 2~4개)가 새로 추가됐다 - 이 URL은 본문에서 공식 출처로 인용될 뿐
+# 아니라, 로그인 없이 볼 수 있는 공개 페이지라면 그대로 Playwright
+# 스크린샷 캡처 대상으로도 쓰인다(build_screenshot_photos 참고).
+OUTPUT_FORMAT_BLOCK = """Output format (follow exactly):
+TITLE: (a specific, SEO-friendly English title, under 60 characters, no clickbait)
+TAGS: (3-5 comma-separated tags)
+KEYWORD: (the single primary target keyword/phrase for this post)
+SOURCES: (2-4 official URLs you actually used and are citing, separated by " | " - \
+each must be the vendor's own official domain, e.g. a pricing or support page, \
+never a third-party review/roundup site)
+---
+(the post body in Markdown, following the structure above)"""
 
 
-def _is_health_related(topic: str, tags: str) -> bool:
-    haystack = f"{topic} {tags}"
-    return any(kw in haystack for kw in HEALTH_KEYWORDS)
-
-
-def build_health_sources_block(topic: str, tags: str) -> str:
-    """건강/수면/영양제/질병 등 주제일 때, 공신력 있는 공공기관 출처 링크를
-    본문 끝에 덧붙인다. build_finance_sources_block()과 같은 패턴 - 수수료
-    없는 순수 정보 제공 블록이며, 해당 주제가 아니면 빈 문자열을 돌려주고
-    절대 예외를 일으키지 않는다."""
-    if not _is_health_related(topic, tags):
+def _niche_avoid_block(recent_titles: list[str]) -> str:
+    if not recent_titles:
         return ""
+    recent_list = "\n".join(f"- {t}" for t in recent_titles)
+    return f"\nDo not repeat these already-published titles/topics:\n{recent_list}\n"
 
-    haystack = f"{topic} {tags}"
-    links = list(HEALTH_DEFAULT_LINKS)
-    for kw, extra_links in HEALTH_CATEGORY_LINKS.items():
-        if kw in haystack:
-            links.extend(extra_links)
 
-    seen = set()
-    unique_links = []
-    for name, url in links:
-        if url not in seen:
-            seen.add(url)
-            unique_links.append((name, url))
+def build_how_to_prompt(topic: dict, recent_titles: list[str]) -> str:
+    """How-to 포맷(클러스터 A/B): AI 도구 실사용 가이드 / 생산성·자동화 가이드.
+    AI Overview가 단순 정보성 How-to 검색의 CTR을 크게 깎아먹는다는 신호가
+    있어서 다른 포맷보다 발행 우선순위(NICHE_CLUSTER_WEIGHT)는 낮지만, 니치
+    구성상 필요한 축이라 계속 발행한다."""
+    return f"""You are writing a how-to guide for an English-language blog about AI-powered productivity tools, for a US audience.
 
-    lines = ["\n\n---\n", "**📌 더 정확한 정보가 필요하다면 아래 공식 출처를 확인하세요:**\n"]
-    for name, url in unique_links:
-        lines.append(f"- [{name}]({url})")
-    lines.append(
-        "\n*이 글은 일반적인 정보 제공을 목적으로 하며, 의학적 진단이나 치료를 "
-        "대신하지 않습니다. 증상이 있거나 건강이 걱정된다면 의사·약사 등 "
-        "전문가와 상담하시기 바랍니다.*\n"
-    )
-    return "\n".join(lines)
+Target keyword/topic: "{topic['keyword']}"
+{_niche_avoid_block(recent_titles)}
+Use web search to confirm current steps, UI labels, and feature availability before writing - tools change their interface often, and a stale step-by-step guide is worse than none. Never invent a step, button name, or menu label you haven't verified.
+
+Structure (in this order):
+1. A direct answer to the reader's question in the first 2-3 sentences - no throat-clearing intro.
+2. "What You'll Need" - a short list of prerequisites (account, plan tier, browser, etc.), only if genuinely needed.
+3. Step-by-step instructions, with clear numbered steps or ## subheadings per step.
+4. A short FAQ (2-4 questions) addressing likely follow-up questions.
+5. A brief wrap-up (2-3 sentences).
+
+Length: about 900-1300 words. Be concise - don't pad steps with filler just to hit a word count.
+
+Tone: natural, native American English, plain and helpful - like a knowledgeable friend, not a stiff translated manual. No hype, no unverified claims about results or savings.
+
+{OUTPUT_FORMAT_BLOCK}
+"""
+
+
+def build_alternative_prompt(topic: dict, recent_titles: list[str]) -> str:
+    """Alternative 포맷(클러스터 C): 유료 툴의 무료/저가 대안 목록형 글."""
+    return f"""You are writing a "best free alternatives" guide for an English-language blog about AI-powered productivity tools, for a US audience.
+
+Target keyword/topic: "{topic['keyword']}"
+{_niche_avoid_block(recent_titles)}
+Use web search to confirm each tool's CURRENT pricing, free-tier limits, and core features - these change often and a stale price is worse than none.
+
+Structure (in this order):
+1. A direct answer up front: name the single best pick and 1-2 runners-up in the first 2-3 sentences.
+2. "How We Picked" - the selection criteria used (price, features, ease of use, etc.), as 3-5 short bullet points.
+3. A rundown of each alternative (3-5 tools), one ## subheading per tool, covering what it's good for and its real free-tier limits.
+4. A Markdown comparison table summarizing price, key limitation, and best-for across all tools listed.
+5. A short FAQ (2-4 questions).
+
+You must cite each tool's OFFICIAL pricing page in SOURCES - not a review site or a "best of" roundup article. These must be links to each vendor's own domain (e.g. canva.com/pricing, notion.so/pricing).
+
+Length: about 1000-1400 words.
+
+Tone: natural, native American English, plain and helpful. No hype, no unverified claims.
+
+{OUTPUT_FORMAT_BLOCK}
+"""
+
+
+def build_troubleshoot_prompt(topic: dict, recent_titles: list[str]) -> str:
+    """Troubleshoot 포맷(클러스터 D): 원격근무 툴 오류 해결. 경쟁도가 낮아
+    NICHE_CLUSTER_WEIGHT에서 가장 우선순위를 높게 둔 축이다."""
+    return f"""You are writing a troubleshooting guide for an English-language blog about remote-work software problems, for a US audience.
+
+Target keyword/topic: "{topic['keyword']}"
+{_niche_avoid_block(recent_titles)}
+Use web search to confirm the CURRENT fix against the tool's own official support/help-center pages - UI labels and settings menus change often, and a stale fix is worse than none.
+
+Structure (in this order):
+1. A direct answer: the single most common fix, in the first 1-2 sentences. People searching an error want the fix fast.
+2. "Why This Happens" - the likely causes, briefly.
+3. Step-by-step fixes, ordered from the quickest/most common fix to less common ones.
+4. "How to Prevent It Next Time" - a short prevention section.
+
+You must cite the tool's own OFFICIAL support/help-center page in SOURCES (e.g. support.zoom.us, support.google.com) - not a random forum or third-party tech blog.
+
+Length: about 700-1000 words. Troubleshooting readers want the fix fast - don't pad this out.
+
+Tone: natural, native American English, plain and direct.
+
+{OUTPUT_FORMAT_BLOCK}
+"""
+
+
+def build_comparison_prompt(topic: dict, recent_titles: list[str]) -> str:
+    """Comparison 포맷(클러스터 E): 생산성 소프트웨어 정면 비교. 광고
+    친화적이고 AI Overview 노출이 적은 구매의도 검색이라 우선순위가 높다."""
+    return f"""You are writing a head-to-head software comparison for an English-language blog about productivity tools, for a US audience.
+
+Target keyword/topic: "{topic['keyword']}"
+{_niche_avoid_block(recent_titles)}
+Use web search to confirm both tools' CURRENT pricing, plans, and key features directly from their own official pages.
+
+Structure (in this order):
+1. A direct answer: a 2-3 sentence verdict summary right away - which tool wins and for whom.
+2. A Markdown comparison table across price, core features, and target user.
+3. Item-by-item analysis: ## subheadings for 3-4 key dimensions (e.g. pricing, ease of use, a key feature difference, collaboration/integrations), comparing both tools directly in each.
+4. "Who Should Use Which" - map user type to recommendation.
+5. A short FAQ (2-4 questions).
+
+You must cite each company's own OFFICIAL pricing/spec page in SOURCES (both companies, not a third-party comparison site).
+
+Length: about 1100-1500 words.
+
+Tone: natural, native American English, confident but fair to both sides - no hype, no unverified claims.
+
+{OUTPUT_FORMAT_BLOCK}
+"""
+
+
+NICHE_FORMAT_PROMPT_BUILDERS = {
+    "how_to": build_how_to_prompt,
+    "alternative": build_alternative_prompt,
+    "troubleshoot": build_troubleshoot_prompt,
+    "comparison": build_comparison_prompt,
+}
 
 
 def build_manual_affiliate_block(manual: dict) -> str:
     """load_manual_topic()으로 받은, 이미 정해진 실제 쿠팡파트너스 링크(또는 배너
-    HTML)를 그대로 쓴다 (build_affiliate_block()과 달리 검색 링크로 대체하지 않음).
+    HTML)를 그대로 쓴다 (현재는 새 니치와 맞는 제품이 없어 쓰이지 않지만
+    기능은 남겨둔다).
 
     manual에 affiliate_html/disclosure_text가 있으면 그 원문 그대로(HTML 배너 +
     지정된 고지문)를 쓰고, 없으면 affiliate_url/affiliate_label로 마크다운 링크
@@ -1031,10 +664,15 @@ def build_image_block(photo: dict | None) -> str:
     )
 
 
-def distribute_images_into_body(body: str, photos: list[dict]) -> str:
-    """정보성 글 본문에 사진 여러 장(3~5장)을 흩어 배치한다: 첫 장은 글 맨 위,
-    나머지는 각 소제목(##) 바로 아래에 하나씩. 소제목보다 사진이 많으면 남는
-    사진은 버리고, 사진이 없으면 원래 본문을 그대로 돌려준다."""
+def distribute_images_into_body(
+    body: str, photos: list[dict], block_builder=build_image_block
+) -> str:
+    """본문에 사진 여러 장을 흩어 배치한다: 첫 장은 글 맨 위, 나머지는 각
+    소제목(##) 바로 아래에 하나씩. 소제목보다 사진이 많으면 남는 사진은
+    버리고, 사진이 없으면 원래 본문을 그대로 돌려준다. block_builder로
+    사진 한 장을 마크다운 블록으로 렌더링하는 함수를 바꿔 끼울 수 있다
+    (기본은 Unsplash용 build_image_block, 새 니치는 build_niche_image_block
+    을 넘긴다 - 스크린샷/Unsplash를 섞어서 렌더링해야 해서)."""
     if not photos:
         return body
 
@@ -1049,10 +687,97 @@ def distribute_images_into_body(body: str, photos: list[dict]) -> str:
             next_photo = next(photo_iter, None)
             if next_photo:
                 out.append("")
-                out.append(build_image_block(next_photo).rstrip("\n"))
+                out.append(block_builder(next_photo).rstrip("\n"))
 
     result = "\n".join(out)
-    return (build_image_block(top_photo) if top_photo else "") + result
+    return (block_builder(top_photo) if top_photo else "") + result
+
+
+# 새 니치는 소프트웨어 화면 캡처가 필요한데, "직접 제작/캡처/AI생성/명확한
+# 라이선스만" 원칙상 Unsplash 일반 스톡사진을 화면 캡처 자리에 쓸 수 없다.
+# 그래서 Claude가 SOURCES로 알려준 공식 페이지(가격/지원문서 등, 로그인
+# 불필요)를 Playwright로 우리가 직접 캡처해서 쓴다. 로그인이 필요한 실제
+# 사용 화면(예: 채팅 내용)은 계정 자동화 없이는 캡처할 수 없어서 시도하지
+# 않고, 캡처가 실패하거나 하나도 없을 때만 Unsplash로 대체한다.
+SCREENSHOTS_ASSET_DIR = DOCS_DIR / "assets" / "img"
+# GitHub Pages 배포 URL (auto-blog-autopilot/README.md 참고) - Jekyll
+# markdown과 Blogger HTML 양쪽에서 그대로 쓸 수 있는 절대 URL이 필요해서
+# site.baseurl 같은 상대 경로 태그 대신 이 값을 직접 붙인다.
+SITE_BASE_URL = "https://afroditena.github.io/mattress-checklist-android"
+PLAYWRIGHT_CHROMIUM_PATH = os.environ.get("PLAYWRIGHT_CHROMIUM_PATH", "/opt/pw-browsers/chromium")
+
+
+def capture_page_screenshot(url: str, out_path: Path) -> bool:
+    """로그인 없이 볼 수 있는 공개 페이지 하나를 Playwright(headless Chromium)로
+    그대로 캡처해서 out_path에 PNG로 저장한다. playwright 미설치, 접속 실패,
+    타임아웃 등 어떤 이유로든 실패하면 조용히 False를 돌려준다 - 캡처
+    실패가 발행 자체를 막으면 안 되고, 호출부가 Unsplash 등으로 대체한다."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("playwright가 설치돼 있지 않아 화면 캡처를 건너뜁니다.")
+        return False
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(executable_path=PLAYWRIGHT_CHROMIUM_PATH, headless=True)
+            try:
+                page = browser.new_page(viewport={"width": 1280, "height": 800})
+                page.goto(url, timeout=20000, wait_until="load")
+                page.wait_for_timeout(1500)  # 지연 로딩되는 요소 대기
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(out_path))
+            finally:
+                browser.close()
+        return out_path.exists() and out_path.stat().st_size > 0
+    except Exception as e:
+        print(f"화면 캡처 실패({url}): {e}")
+        return False
+
+
+def build_screenshot_photos(sources: list[str], slug: str) -> list[dict]:
+    """SOURCES로 받은 공식 페이지 URL들을 직접 캡처해서, docs/assets/img/<slug>/
+    에 저장하고 절대 URL과 함께 사진 dict 목록으로 돌려준다(로그인이 필요하거나
+    캡처가 실패한 URL은 조용히 건너뜀). 이 파일들은 main()이 성공적으로 글을
+    쓴 뒤 GitHub Actions 워크플로가 docs/assets와 함께 커밋해야 실제로
+    남는다(워크플로 git add 단계 참고) - 커밋 안 되면 캡처만 되고 다음 실행
+    때 사라진다."""
+    photos = []
+    for i, url in enumerate(sources[:5], start=1):
+        out_path = SCREENSHOTS_ASSET_DIR / slug / f"{i}.png"
+        if not capture_page_screenshot(url, out_path):
+            continue
+        domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
+        rel = out_path.relative_to(DOCS_DIR).as_posix()
+        photos.append(
+            {
+                "kind": "screenshot",
+                "url": f"{SITE_BASE_URL}/{rel}",
+                "alt": f"{domain} official page screenshot",
+                "source_name": domain,
+                "source_url": url,
+            }
+        )
+    return photos
+
+
+def build_niche_image_block(photo: dict | None) -> str:
+    """새 니치용 이미지 블록 렌더러. photo["kind"]가 "screenshot"이면
+    build_screenshot_photos()가 만든 실제 화면 캡처를 캡션과 함께 넣고,
+    그 외(Unsplash 대체 사진)에는 build_image_block()과 같은 출처 표기를
+    쓴다. distribute_images_into_body()에 block_builder로 넘겨서 스크린샷과
+    Unsplash 대체 사진이 섞여 있어도 한 함수로 렌더링할 수 있게 한다."""
+    if not photo or not photo.get("url"):
+        return ""
+
+    if photo.get("kind") == "screenshot":
+        alt = photo.get("alt", "screenshot")
+        source_name = photo.get("source_name", "the official site")
+        source_url = photo.get("source_url", "")
+        caption = f"*Screenshot of {source_name}" + (f" ([source]({source_url}))" if source_url else "") + "*"
+        return f"![{alt}]({photo['url']})\n{caption}\n\n"
+
+    return build_image_block(photo)
 
 
 def extract_product_image(affiliate_html: str) -> dict | None:
@@ -1154,63 +879,61 @@ def post_to_blogger(title: str, body_markdown: str) -> None:
         print(f"Blogger 발행 실패, 이번 회차는 건너뜁니다: {e}")
 
 
-BLOGGER_PRIVACY_PAGE_TITLE = "개인정보처리방침"
-BLOGGER_ABOUT_PAGE_TITLE = "소개"
+BLOGGER_PRIVACY_PAGE_TITLE = "Privacy Policy"
+BLOGGER_ABOUT_PAGE_TITLE = "About"
 
 BLOGGER_PRIVACY_PAGE_MD = """\
-이 페이지는 이 블로그를 방문하시는 분들에게 어떤 정보가 수집되고 어떻게 쓰이는지 설명합니다.
+This page explains what information is collected from visitors to this blog and how it's used.
 
-## 1. 쿠키 및 방문 기록
+## 1. Cookies and Visit Data
 
-이 블로그는 방문 통계 분석을 위해 Google Analytics를 사용할 수 있습니다. Google Analytics는 쿠키를 이용해 방문 페이지, 체류 시간, 접속 기기 등 비식별 통계 정보를 수집합니다. 개인을 특정할 수 있는 정보(이름, 연락처 등)는 수집하지 않습니다.
+This blog may use Google Analytics to analyze visit statistics. Google Analytics uses cookies to collect non-identifying statistics such as pages visited, time on page, and device type. It does not collect personally identifying information (name, contact details, etc.).
 
-## 2. 광고 게재
+## 2. Advertising
 
-이 블로그에는 Google AdSense를 비롯한 제3자 광고가 게재될 수 있습니다. Google 등 광고 게재업체는 이용자의 이전 방문 기록을 바탕으로 맞춤 광고를 보여주기 위해 쿠키를 사용할 수 있습니다.
+This blog may display third-party ads, including Google AdSense. Google and other ad providers may use cookies to show personalized ads based on your prior visits.
 
-- Google이 광고에 쿠키를 사용하는 방식은 [Google 광고 정책](https://policies.google.com/technologies/ads)에서 확인하실 수 있습니다.
-- 맞춤 광고를 원치 않으시면 [Google 광고 설정](https://adssettings.google.com)에서 개인 맞춤 광고를 비활성화할 수 있습니다.
+- You can learn how Google uses cookies for advertising at the [Google Ads Policy](https://policies.google.com/technologies/ads) page.
+- You can opt out of personalized ads at [Google Ads Settings](https://adssettings.google.com).
 
-## 3. 제휴 마케팅(어필리에이트) 고지
+## 3. Content and How It's Made
 
-이 블로그에서 특정 제품을 구체적으로 소개하는 일부 게시글에는 쿠팡 파트너스 활동을 통한 제휴 링크가 포함되어 있으며, 이런 링크를 통해 상품을 구매하시면 이 블로그 운영자가 일정액의 수수료를 제공받을 수 있습니다. 해당 사실은 관련 게시글 본문에도 별도로 고지하고 있습니다. 매트리스·수면환경·건강·재무·핫이슈 같은 정보성 게시글에는 이런 제휴 링크가 붙지 않습니다.
+This blog is run by a single independent operator, and posts are written with the help of AI automation tools. The operator decides what topics to cover and takes final responsibility for what gets published. For claims that can change over time - software pricing, plans, and feature availability - the writing process confirms current facts with web search before publishing, and cites the vendor's own official page as a source rather than a third-party summary.
 
-## 4. 콘텐츠 제작 방식
+## 4. Affiliate Disclosure
 
-이 블로그는 개인 운영자 1인이 기획하고 운영하며, 글은 AI 자동화 도구의 도움을 받아 작성·발행되지만 다룰 주제와 방향, 내용에 대한 최종 책임은 운영자에게 있습니다. 건강·투자·정치처럼 신중하게 다뤄야 하는 주제는 작성 시 검색으로 사실을 확인하고, 특정 질환의 진단·치료나 특정 종목의 매수·매도를 단정하지 않으며, 특정 정당·정치인을 지지·비판하지 않는 원칙을 적용합니다.
+This blog currently carries no affiliate or referral links. If that changes in the future, any affiliate relationship will be disclosed directly in the relevant post and reflected here.
 
-## 5. 문의
+## 5. Contact
 
-이 개인정보처리방침이나 블로그 운영과 관련해 문의하실 내용이 있으면 게시글 댓글을 통해 남겨 주세요.
+If you have questions about this privacy policy or how this blog is run, please leave a comment on any post.
 
-## 6. 개정
+## 6. Changes
 
-이 방침은 서비스 내용 변경이나 관련 법령 개정에 따라 변경될 수 있으며, 변경 시 이 페이지에 반영합니다.
+This policy may change as the service or applicable law changes; updates will be reflected on this page.
 """
 
 BLOGGER_ABOUT_PAGE_MD_TEMPLATE = """\
-## 이 블로그는
+## What This Blog Covers
 
-매트리스·침대 등 수면환경 관리, 청소, 공기청정기·제습기 같은 생활가전의 필요성, 영양제·건강 관련 정보, 그리고 보험·대출·주식 같은 재무 정보를 다룹니다. 매주 수요일과 토요일에는 정치·경제·사회·심리·주식 분야의 최근 이슈도 정리해서 소개합니다.
+This blog covers AI-powered productivity tools: practical guides for tools like ChatGPT and Claude, free/budget alternatives to popular software, fixes for common remote-work tool problems (Zoom, Google Meet, Google Drive, Slack, Notion, Google Docs), and head-to-head comparisons of productivity software.
 
-## 운영자 소개
+## About the Operator
 
-이 블로그는 개인 운영자 1인이 기획하고 운영합니다. 어떤 주제를 다룰지, 언제 발행할지는 운영자가 직접 정하고, 글을 쓰는 과정에는 AI 자동화 도구의 도움을 받습니다. 다만 최종적으로 어떤 내용을 올릴지, 그 내용이 사실에 맞는지에 대한 책임은 AI가 아니라 운영자에게 있습니다. 품질을 높이기 위해 매일이 아니라 주중 며칠에 걸쳐 발행합니다.
+This blog is run by a single independent operator. The operator decides what topics to cover and when to publish, and the writing process uses AI automation tools. Final responsibility for what's published - and whether it's accurate - rests with the operator, not the AI. Posts are published a few days a week rather than daily, to keep the focus on quality over volume.
 
-## 콘텐츠를 만드는 방식
+## How Content Is Made
 
-다룰 주제와 방향은 운영자가 정합니다. 글은 AI 자동화 도구의 도움을 받아 작성되며, 특히 건강·투자·정치처럼 신중하게 다뤄야 하는 주제에는 다음 원칙을 적용합니다.
+- Every post is fact-checked with web search before publishing, especially for anything that changes over time, like software pricing, plans, or feature availability.
+- Official vendor pages (pricing pages, support/help-center pages) are cited directly as sources rather than summarizing third-party reviews.
+- Screenshots used in posts are captured directly from the official public pages being discussed; posts don't reuse other sites' or blogs' images.
+- Posts aim to be useful and specific rather than padded out to hit a word count.
 
-- 최신 정보를 검색으로 확인한 뒤 작성하고, 확인되지 않은 내용은 쓰지 않습니다.
-- 건강 정보는 특정 질환의 진단·치료를 단정하지 않으며, 의학적 판단이 필요하면 의사·약사 상담을 권합니다.
-- 투자·재무 정보는 특정 상품 가입이나 종목 매수·매도를 권유하지 않으며, 관련 공식 출처를 함께 안내합니다.
-- 정치 이슈는 특정 정당·정치인을 지지하거나 비판하지 않고, 사실과 해석을 구분해서 씁니다.
+This blog currently carries no affiliate or referral links. See the [Privacy Policy]({privacy_url}) page for more detail.
 
-일부 게시글(제품을 구체적으로 소개하는 글)에는 쿠팡 파트너스 제휴 링크가 포함되어 있고, 이를 통한 구매가 이루어지면 운영자가 일정액의 수수료를 받을 수 있습니다. 해당 게시글에는 이 사실을 본문에 별도로 고지합니다. 매트리스·건강·재무·핫이슈 정보성 글에는 제휴 링크가 붙지 않습니다. 자세한 내용은 [개인정보처리방침]({privacy_url}) 페이지를 참고해 주세요.
+## Contact
 
-## 연락
-
-블로그 내용에 대한 의견이나 문의는 게시글 댓글로 남겨 주시면 확인합니다.
+Questions or feedback about this blog can be left as a comment on any post.
 """
 
 
@@ -1374,64 +1097,47 @@ def main() -> None:
         fix_known_post_title()
         return
 
-    if os.environ.get("FORCE_PUBLISH_DURING_PIVOT") != "true":
-        # 2026-09-18: 블로그 니치를 "AI-Powered Productivity Tools"(영어)로
-        # 완전히 전환하기로 결정됨에 따라, 기존 니치(매트리스/건강/재무/
-        # 정치·경제 핫이슈, topics.txt)로 자동 발행되는 걸 막아둔다. 지금
-        # 큐에 있는 주제는 전부 새 기준(클러스터 A~E, 포맷별 구조, 영어,
-        # 출처 인용, 이미지 규칙)과 맞지 않으므로 새 파이프라인이 준비되고
-        # 사용자가 확인하기 전까지는 발행을 건너뛰고 검토를 요청한다.
-        # (새 파이프라인이 준비되면 이 게이트를 제거한다.)
-        print(
-            "니치 전환 검토 대기 중: 새 AI 생산성툴 니치(영어) 파이프라인이 "
-            "아직 준비되지 않아 이번 회차는 발행을 건너뜁니다. 기존 큐 "
-            "주제는 새 기준과 맞지 않습니다 - 검토 필요."
-        )
-        return
-
     manual = load_manual_topic()
     recent_titles = get_recent_titles()
 
-    # 핫이슈 요일 판정은 실행 시각(UTC)이 아니라 실제 발행되는 KST 기준
-    # 요일로 해야 한다 - 이 워크플로는 22:00 UTC(=07:00 KST 다음날)에 돌기
-    # 때문에, UTC 그대로 쓰면 요일이 하루 밀린다.
+    # 요일 판정은 실행 시각(UTC)이 아니라 실제 발행되는 KST 기준이어야 한다 -
+    # 이 워크플로는 22:00 UTC(=07:00 KST 다음날)에 돌기 때문에, UTC 그대로
+    # 쓰면 요일이 하루 밀린다.
     kst_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-    forced_category = os.environ.get("FORCE_HOT_ISSUE_CATEGORY", "").strip()
-    if manual:
-        hot_issue_category = None
-    elif forced_category in HOT_ISSUE_CATEGORIES or forced_category == "정치":
-        # workflow_dispatch 수동 검증용: 수/토가 아닌 날에도 미리 확인해볼 수 있게.
-        print(f"FORCE_HOT_ISSUE_CATEGORY로 강제 지정됨: {forced_category}")
-        hot_issue_category = forced_category
-    else:
-        hot_issue_category = hot_issue_category_for_today(kst_now.date())
 
-    if not manual and not hot_issue_category and kst_now.weekday() in REST_WEEKDAYS:
+    if not manual and kst_now.weekday() in REST_WEEKDAYS:
         # 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후 매일 발행 대신 발행
-        # 빈도를 줄이기로 했다. 지정 발행(manual)과 핫이슈 요일은 예외로
-        # 그대로 진행하고, 그 외 정보성 글만 화/일에 건너뛴다. Claude API
-        # 호출 전에 바로 return해서 비용도 함께 아낀다.
+        # 빈도를 줄이기로 했다. 지정 발행(manual)은 예외로 그대로 진행하고,
+        # 그 외 니치 글만 화/일에 건너뛴다. Claude API 호출 전에 바로
+        # return해서 비용도 함께 아낀다.
         weekday_kr = "월화수목금토일"[kst_now.weekday()]
         print(f"오늘은 휴무일입니다 (KST {kst_now.date().isoformat()} {weekday_kr}요일) - 발행 빈도를 줄이고 품질에 집중하기 위해 이번 발행은 건너뜁니다.")
         return
 
+    niche_topic = None
     if manual:
         topic = manual["topic"]
         prompt = build_product_prompt(manual, recent_titles)
-    elif hot_issue_category:
-        weekday_kr = "월화수목금토일"[kst_now.weekday()]
-        print(f"오늘은 핫이슈 요일입니다 (KST {kst_now.date().isoformat()} {weekday_kr}요일) -> 카테고리: {hot_issue_category}")
-        topic = f"{hot_issue_category} 핫이슈"
-        prompt = build_hot_issue_prompt(hot_issue_category, recent_titles)
     else:
-        topic = select_topic()
-        prompt = build_prompt(topic, recent_titles)
+        niche_topic = select_niche_topic()
+        topic = niche_topic["keyword"]
+        prompt_builder = NICHE_FORMAT_PROMPT_BUILDERS[niche_topic["format"]]
+        prompt = prompt_builder(niche_topic, recent_titles)
 
     # manual(제품 지정 발행)만 web_search를 끈다 - 이미 실제로 주어진
-    # product_info만 근거로 쓰게 돼 있어서 검색이 필요 없다. 정보성 글과
-    # 핫이슈 글은 둘 다 실제 사실 확인이 필요해서 켠다.
+    # product_info만 근거로 쓰게 돼 있어서 검색이 필요 없다. 새 니치 포맷은
+    # 전부 가격/기능/오류 해결법 등 시점에 따라 바뀌는 사실을 다뤄서 검색이
+    # 필수다.
     raw_output = call_claude(prompt, enable_web_search=not manual)
-    title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=topic)
+
+    if manual:
+        title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=topic)
+        sources = []
+    else:
+        title, tags, keyword, sources, body = parse_niche_output(raw_output, fallback_title=topic)
+
+    today = datetime.date.today()
+    slug = slugify(title)
 
     if manual and manual.get("affiliate_html"):
         # 제품 지정 발행: 무관한 Unsplash 스톡사진 대신, 이미 갖고 있는
@@ -1443,24 +1149,20 @@ def main() -> None:
         photo = find_stock_photo(image_query or keyword or topic)
         body = build_image_block(photo) + body
     else:
-        # 정보성 글: 사진 3~5장(맨 위 1장 + 소제목마다 1장)을 흩어 배치해서
-        # 체류시간과 가독성을 높인다.
-        photos = find_stock_photos(image_query or keyword or topic, count=5)
-        if not photos and hot_issue_category:
-            # 핫이슈 글의 IMAGE_QUERY는 그날그날 구체적인 이슈에 맞춰 AI가
-            # 즉석에서 만든 영어 문구라(예: "national flags diplomatic
-            # meeting room") Unsplash에 검색 결과가 아예 없는 경우가 실제로
-            # 있었다. 정보성 글과 달리 매번 새로 지어내는 문구라 이런
-            # 공백이 더 잦으므로, 카테고리 단위의 무난한 대체 검색어로
-            # 한 번 더 시도한다.
-            fallback_query = HOT_ISSUE_FALLBACK_IMAGE_QUERY.get(hot_issue_category)
-            if fallback_query:
-                print(f"핫이슈 이미지 검색어 대체 시도: '{image_query}' -> '{fallback_query}'")
-                photos = find_stock_photos(fallback_query, count=5)
-        body = distribute_images_into_body(body, photos)
+        # 새 니치: SOURCES로 받은 공식 페이지들을 직접 캡처해서 실제 화면
+        # 스크린샷으로 쓴다("직접 제작/캡처/AI생성/명확한 라이선스만" 원칙 -
+        # 소프트웨어 화면 자리에 무관한 Unsplash 스톡사진을 쓸 수 없어서다).
+        # 로그인 필요/타임아웃 등으로 캡처가 하나도 성공하지 못했을 때만
+        # Unsplash 사진 1장을 대표 이미지로 대신 쓴다.
+        photos = build_screenshot_photos(sources, slug)
+        if not photos:
+            print("공식 페이지 캡처가 하나도 성공하지 못해 Unsplash 대표 이미지로 대신합니다.")
+            stock = find_stock_photo(f"{niche_topic['cluster_name']} software" if niche_topic else keyword or topic)
+            if stock:
+                stock = dict(stock, kind="unsplash")
+                photos = [stock]
+        body = distribute_images_into_body(body, photos, block_builder=build_niche_image_block)
 
-    today = datetime.date.today()
-    slug = slugify(title)
     POSTS_DIR.mkdir(parents=True, exist_ok=True)
     post_path = POSTS_DIR / f"{today.isoformat()}-{slug}.md"
 
@@ -1481,30 +1183,21 @@ def main() -> None:
         # 특정 제품(쿠팡파트너스 링크) 지정 발행: 사용자가 날짜·제품·링크를
         # 직접 지정한 경우에만 실제 링크(또는 배너 HTML)를 그대로 쓴다.
         affiliate_block = build_manual_affiliate_block(manual)
-        finance_block = ""
-        health_block = ""
-        hot_issue_block = ""
     else:
-        # 정보성 글(주제 큐 기반 발행)에는 쿠팡 링크를 달지 않는다 - 실제
-        # 제휴 상품은 날짜/제품/링크를 지정한 manual_topic(_queue)로만 발행한다.
+        # 새 니치 글에는 현재 제휴/수익화 링크를 붙이지 않는다.
         affiliate_block = ""
-        finance_block = build_finance_sources_block(topic, tags)
-        health_block = build_health_sources_block(topic, tags)
-        # 핫이슈 글은 시점에 따라 내용이 바뀔 수 있어서, 건강/금융 주제와
-        # 매칭되는지와 별개로 프레시니스 고지를 항상 붙인다.
-        hot_issue_block = build_hot_issue_disclaimer_block() if hot_issue_category else ""
-    post_path.write_text(
-        front_matter + "\n" + body + affiliate_block + finance_block + health_block + hot_issue_block,
-        encoding="utf-8",
-    )
+    full_body = body + affiliate_block
+    post_path.write_text(front_matter + "\n" + full_body, encoding="utf-8")
 
     print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
 
-    post_to_blogger(safe_title, body + affiliate_block + finance_block + health_block + hot_issue_block)
+    post_to_blogger(safe_title, full_body)
     sync_blogger_static_pages()
 
     if manual:
         consume_manual_topic(manual)
+    else:
+        save_used_topic_id(niche_topic["id"])
 
 
 if __name__ == "__main__":

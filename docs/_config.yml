@@ -1,10 +1,11 @@
-title: "생활 정보 블로그"
-description: "매일 자동으로 생성되는 생활 정보 블로그 (Claude API 자동화 파이프라인)"
+title: "AI Productivity Digest"
+description: "Practical guides, alternatives, and troubleshooting for AI-powered productivity tools"
 markdown: kramdown
 plugins:
   - jekyll-feed
 
-# 자동화 스크립트가 이 폴더(docs/_posts)에 매일 새 글을 커밋합니다.
+# 자동화 스크립트가 이 폴더(docs/_posts)에 새 글을 커밋합니다 (주 5회, REST_WEEKDAYS 참고).
+# 2026-09-18 이전 글들은 이전 니치(매트리스/건강/재무, 한국어)의 아카이브로 남아있습니다.
 
 # GA4 측정 ID (예: "G-XXXXXXXXXX"). 이 값은 비밀값이 아니라 공개 페이지에
 # 그대로 노출되는 값이라 GitHub Secrets가 아니라 여기 직접 적으면 됩니다.

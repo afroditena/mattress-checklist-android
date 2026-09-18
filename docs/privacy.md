@@ -1,36 +1,36 @@
 ---
 layout: default
-title: 개인정보처리방침
-description: 이 블로그의 개인정보 처리 및 광고·제휴 고지 사항
+title: Privacy Policy
+description: How this blog handles visitor data and discloses advertising/affiliate relationships
 ---
 
-시행일자: 2026년 9월 5일 (최종 개정: 2026년 9월 14일)
+Effective: September 5, 2026 (last revised: September 18, 2026)
 
-이 페이지는 이 블로그({{ site.title }})를 방문하시는 분들에게 어떤 정보가 수집되고 어떻게 쓰이는지 설명합니다.
+This page explains what information is collected from visitors to this blog ({{ site.title }}) and how it's used.
 
-## 1. 쿠키 및 방문 기록
+## 1. Cookies and Visit Data
 
-이 블로그는 방문 통계 분석을 위해 Google Analytics를 사용할 수 있습니다. Google Analytics는 쿠키를 이용해 방문 페이지, 체류 시간, 접속 기기 등 비식별 통계 정보를 수집합니다. 개인을 특정할 수 있는 정보(이름, 연락처 등)는 수집하지 않습니다.
+This blog may use Google Analytics to analyze visit statistics. Google Analytics uses cookies to collect non-identifying statistics such as pages visited, time on page, and device type. It does not collect personally identifying information (name, contact details, etc.).
 
-## 2. 광고 게재
+## 2. Advertising
 
-이 블로그에는 Google AdSense를 비롯한 제3자 광고가 게재될 수 있습니다. Google 등 광고 게재업체는 이용자의 이전 방문 기록을 바탕으로 맞춤 광고를 보여주기 위해 쿠키를 사용할 수 있습니다.
+This blog may display third-party ads, including Google AdSense. Google and other ad providers may use cookies to show personalized ads based on your prior visits.
 
-- Google이 광고에 쿠키를 사용하는 방식은 [Google 광고 정책](https://policies.google.com/technologies/ads)에서 확인하실 수 있습니다.
-- 맞춤 광고를 원치 않으시면 [Google 광고 설정](https://adssettings.google.com)에서 개인 맞춤 광고를 비활성화할 수 있습니다.
+- You can learn how Google uses cookies for advertising at the [Google Ads Policy](https://policies.google.com/technologies/ads) page.
+- You can opt out of personalized ads at [Google Ads Settings](https://adssettings.google.com).
 
-## 3. 제휴 마케팅(어필리에이트) 고지
+## 3. Affiliate Disclosure
 
-이 블로그에서 특정 제품을 구체적으로 소개하는 일부 게시글에는 쿠팡 파트너스 활동을 통한 제휴 링크가 포함되어 있으며, 이런 링크를 통해 상품을 구매하시면 이 블로그 운영자가 일정액의 수수료를 제공받을 수 있습니다. 해당 사실은 관련 게시글 본문에도 별도로 고지하고 있습니다. 매트리스·수면환경·건강·재무·핫이슈 같은 정보성 게시글에는 이런 제휴 링크가 붙지 않습니다. 제휴 링크 포함 여부와 관계없이 상품 소개 내용은 실제 제품 정보를 바탕으로 작성합니다.
+This blog currently carries no affiliate or referral links. If that changes in the future, any affiliate relationship will be disclosed directly in the relevant post and reflected here.
 
-## 4. 콘텐츠 제작 방식
+## 4. Content and How It's Made
 
-이 블로그는 개인 운영자 1인이 기획하고 운영하며, 글은 AI 자동화 도구의 도움을 받아 작성·발행되지만 다룰 주제와 방향, 내용에 대한 최종 책임은 운영자에게 있습니다. 건강·투자·정치처럼 신중하게 다뤄야 하는 주제는 작성 시 검색으로 사실을 확인하고, 특정 질환의 진단·치료나 특정 종목의 매수·매도를 단정하지 않으며, 특정 정당·정치인을 지지·비판하지 않는 원칙을 적용합니다. 자세한 운영 방식은 [소개]({{ '/about' | relative_url }}) 페이지를 참고해 주세요.
+This blog is run by a single independent operator, and posts are written with the help of AI automation tools, but the operator decides what topics to cover and takes final responsibility for what's published. For claims that can change over time - software pricing, plans, and feature availability - the writing process confirms current facts with web search before publishing, and cites the vendor's own official page as a source rather than a third-party summary. See the [About]({{ '/about' | relative_url }}) page for more detail.
 
-## 5. 문의
+## 5. Contact
 
-이 개인정보처리방침이나 블로그 운영과 관련해 문의하실 내용이 있으면 게시글 댓글을 통해 남겨 주세요.
+If you have questions about this privacy policy or how this blog is run, please leave a comment on any post.
 
-## 6. 개정
+## 6. Changes
 
-이 방침은 서비스 내용 변경이나 관련 법령 개정에 따라 변경될 수 있으며, 변경 시 이 페이지에 반영합니다.
+This policy may change as the service or applicable law changes; updates will be reflected on this page.
