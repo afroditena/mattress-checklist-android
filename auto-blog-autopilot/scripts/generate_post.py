@@ -25,12 +25,17 @@
   파일로 저장한다.
 - 구글 Blogger API 인증 정보(GOOGLE_CLIENT_ID 등)가 설정되어 있으면,
   같은 글을 Blogger에도 동시에 자동 발행한다 (설정 안 돼 있으면 조용히 건너뜀).
-  2026-09-20부터: 클러스터 D(트러블슈팅) 글만 new-maind가 아니라 같은
-  구글 계정 소유의 별도 블로그(SECOND_BLOG_URL,
-  simple-tech-fix.blogspot.com)로 보낸다 - 블로그 이름/니치가 잘 맞고
-  같은 글이 두 블로그에 중복 발행되는 걸 피하기 위해서다. GitHub
-  Pages(docs/_posts)는 이 분기와 무관하게 항상 전체 클러스터를 보관하는
-  단일 아카이브로 남는다 (resolve_blog_id_by_url() 참고).
+  2026-09-20부터: 클러스터 D(트러블슈팅)는 아예 별도 갈래로 분리됐다 -
+  new-maind(BLOGGER_BLOG_ID)로 나가는 "일반 니치" 갈래는 A/B/C/E만 후보로
+  삼고(화/일 휴무일 적용), 같은 구글 계정 소유의 별도 블로그(SECOND_BLOG_URL,
+  simple-tech-fix.blogspot.com)로 나가는 "트러블슈팅 전용 일일" 갈래가
+  클러스터 D만 후보로 삼아 휴무일 없이 매일 돈다 - 이 블로그는 "매일
+  발행해달라"는 요청으로 만들어졌다. main()이 한 번 실행에 이 두 갈래를
+  각각 _run_arm()으로 감싸서 실행하므로, 한쪽이 API 오류로 실패해도
+  (call_claude()의 sys.exit 포함) 다른 쪽이나 이미 성공한 파일의 커밋을
+  막지 않는다. GitHub Pages(docs/_posts)는 이 분기와 무관하게 항상 두
+  갈래 전체를 보관하는 단일 아카이브로 남는다 (resolve_blog_id_by_url(),
+  select_niche_topic()의 include_clusters/exclude_clusters 참고).
 - 이미지는 Unsplash 일반 스톡사진 대신, Claude가 SOURCES로 알려준 공식
   페이지(가격/지원문서 등, 로그인 불필요)를 Playwright로 직접 캡처해서
   쓴다 - "직접 제작/캡처/AI생성/명확한 라이선스만" 원칙상 소프트웨어
@@ -39,8 +44,9 @@
   때만 Unsplash 사진 1장을 대표 이미지로 대신 쓴다 (build_screenshot_photos
   참고). 제품 지정 발행(manual, 현재는 쓰이지 않지만 기능은 남겨둠) 글은
   기존처럼 Unsplash나 실제 제품 이미지를 그대로 쓴다.
-- 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후 매일 발행 대신 화/일을
-  휴무일로 두고 주 5회만 발행한다 (REST_WEEKDAYS).
+- 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후 new-maind는 매일 발행 대신
+  화/일을 휴무일로 두고 주 5회만 발행한다 (REST_WEEKDAYS) - simple-tech-fix
+  전용 트러블슈팅 갈래는 이 휴무일 적용 대상이 아니다(매일 발행 요청).
 """
 
 import datetime
@@ -144,29 +150,45 @@ def save_used_topic_id(topic_id: str) -> None:
     USED_TOPIC_IDS_FILE.write_text(json.dumps(used, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def select_niche_topic() -> dict:
-    """topics.json 30개 중 하나를 클러스터 가중치(NICHE_CLUSTER_WEIGHT) 기반
-    가중 무작위로 고른다. 최근에 쓴 주제(used_topic_ids.json)는 먼저
-    제외하고 고르되, 풀을 거의 다 써서 후보가 하나도 안 남으면 전체
+def select_niche_topic(
+    include_clusters: tuple[str, ...] | None = None,
+    exclude_clusters: tuple[str, ...] | None = None,
+) -> dict:
+    """topics.json 중 하나를 클러스터 가중치(NICHE_CLUSTER_WEIGHT) 기반
+    가중 무작위로 고른다. include_clusters/exclude_clusters로 후보 풀을
+    특정 클러스터로 좁히거나(예: D 전용 일일 발행) 뺄 수 있다(예: 일반
+    니치 발행에서는 D를 뺀다 - D는 main()이 매일 별도로 처리하므로).
+    최근에 쓴 주제(used_topic_ids.json, 클러스터 구분 없이 공유)는 먼저
+    제외하고 고르되, 이번 후보 풀이 거의 다 써서 하나도 안 남으면 그
     풀에서 다시 고른다(콘텐츠는 결국 새로고침할 수 있으니 영구 배제는
     아니다). 선택한 주제의 id는 main()이 발행에 성공한 뒤에
     save_used_topic_id()로 기록한다(여기서는 기록하지 않는다 - 실패한
     회차까지 "사용됨"으로 남으면 안 되므로).
 
-    FORCE_NICHE_CLUSTER 환경변수(A~E)가 설정돼 있으면 그 클러스터로만
-    후보를 좁힌다 - workflow_dispatch 수동 검증용 (예: 클러스터 D는 가중치가
-    높아도 확률적으로만 뽑혀서, 두 번째 Blogger 블로그 라우팅을 미리 확인해보고
-    싶을 때 쓴다). 평소 스케줄 실행에는 영향 없다."""
+    FORCE_NICHE_CLUSTER 환경변수(A~E)가 설정돼 있고 그 클러스터가 이번
+    호출의 후보 풀(include/exclude 적용 후) 안에 있으면 그 클러스터로만
+    후보를 더 좁힌다 - workflow_dispatch 수동 검증용. 풀에 없으면(예: 일반
+    니치 호출에서 D를 강제 지정) 무시하고 넘어간다. 평소 스케줄 실행에는
+    영향 없다."""
     topics = load_niche_topics()
     used_ids = set(load_used_topic_ids())
 
+    pool = topics
+    if include_clusters:
+        pool = [t for t in pool if t["cluster"] in include_clusters]
+    if exclude_clusters:
+        pool = [t for t in pool if t["cluster"] not in exclude_clusters]
+    if not pool:
+        pool = topics  # include/exclude 조합이 잘못돼 풀이 비면 안전하게 전체로
+
     forced_cluster = os.environ.get("FORCE_NICHE_CLUSTER", "").strip().upper()
-    pool = [t for t in topics if t["cluster"] == forced_cluster] if forced_cluster else topics
-    if forced_cluster and not pool:
-        print(f"FORCE_NICHE_CLUSTER='{forced_cluster}'에 해당하는 주제가 없어 무시합니다.")
-        pool = topics
-    elif forced_cluster:
-        print(f"FORCE_NICHE_CLUSTER로 강제 지정됨: {forced_cluster}")
+    if forced_cluster:
+        forced_pool = [t for t in pool if t["cluster"] == forced_cluster]
+        if forced_pool:
+            print(f"FORCE_NICHE_CLUSTER로 강제 지정됨: {forced_cluster}")
+            pool = forced_pool
+        else:
+            print(f"FORCE_NICHE_CLUSTER='{forced_cluster}'가 이번 후보 풀에 없어 무시합니다.")
 
     candidates = [t for t in pool if t["id"] not in used_ids] or pool
     weights = [NICHE_CLUSTER_WEIGHT.get(t["cluster"], 1) for t in candidates]
@@ -1251,56 +1273,35 @@ def fix_known_post_title() -> None:
             print(f"Blogger 글 제목 수정 실패: {e}")
 
 
-def main() -> None:
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
+def _run_generation(
+    prompt: str,
+    fallback_title: str,
+    *,
+    manual: dict | None = None,
+    niche_topic: dict | None = None,
+    blog_id: str | None = None,
+) -> None:
+    """프롬프트 하나로 글 하나를 생성해서 GitHub Pages(docs/_posts, 항상
+    전체 클러스터를 보관하는 단일 아카이브)에 저장하고 Blogger에도 발행한다.
+    manual/niche_topic 중 정확히 하나만 넘긴다(어느 쪽인지에 따라 이미지
+    처리·후처리 방식이 다르다 - 제품 지정 발행은 실제 상품 이미지/Unsplash
+    단일 사진, 새 니치는 SOURCES 화면 캡처 여러 장). blog_id를 지정하면
+    그 블로그로, 안 주면 기본 블로그(BLOGGER_BLOG_ID, new-maind)로 발행한다.
 
-    if os.environ.get("RUN_FIX_KNOWN_POST_TITLE") == "true":
-        # 일회성 유지보수 모드: 정상 발행 흐름을 타지 않고 이 작업만 하고 끝낸다
-        # (workflow_dispatch로만 켜지며, 매일 스케줄 실행에는 영향 없음).
-        fix_known_post_title()
-        return
-
-    manual = load_manual_topic()
-    recent_titles = get_recent_titles()
-
-    # 요일 판정은 실행 시각(UTC)이 아니라 실제 발행되는 KST 기준이어야 한다 -
-    # 이 워크플로는 22:00 UTC(=07:00 KST 다음날)에 돌기 때문에, UTC 그대로
-    # 쓰면 요일이 하루 밀린다.
-    kst_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-
-    forced_cluster = os.environ.get("FORCE_NICHE_CLUSTER", "").strip()
-    if not manual and not forced_cluster and kst_now.weekday() in REST_WEEKDAYS:
-        # 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후 매일 발행 대신 발행
-        # 빈도를 줄이기로 했다. 지정 발행(manual)과 FORCE_NICHE_CLUSTER
-        # 수동 검증은 예외로 그대로 진행하고(검증하려고 일부러 켠 건데
-        # 휴무일이라고 막히면 안 되므로), 그 외 니치 글만 화/일에 건너뛴다.
-        # Claude API 호출 전에 바로 return해서 비용도 함께 아낀다.
-        weekday_kr = "월화수목금토일"[kst_now.weekday()]
-        print(f"오늘은 휴무일입니다 (KST {kst_now.date().isoformat()} {weekday_kr}요일) - 발행 빈도를 줄이고 품질에 집중하기 위해 이번 발행은 건너뜁니다.")
-        return
-
-    niche_topic = None
-    if manual:
-        topic = manual["topic"]
-        prompt = build_product_prompt(manual, recent_titles)
-    else:
-        niche_topic = select_niche_topic()
-        topic = niche_topic["keyword"]
-        prompt_builder = NICHE_FORMAT_PROMPT_BUILDERS[niche_topic["format"]]
-        prompt = prompt_builder(niche_topic, recent_titles)
-
-    # manual(제품 지정 발행)만 web_search를 끈다 - 이미 실제로 주어진
-    # product_info만 근거로 쓰게 돼 있어서 검색이 필요 없다. 새 니치 포맷은
-    # 전부 가격/기능/오류 해결법 등 시점에 따라 바뀌는 사실을 다뤄서 검색이
-    # 필수다.
+    main()이 이 함수를 최대 두 번 부른다 - "일반 니치"(A/B/C/E, 클러스터
+    가중치 기반, new-maind, 화/일 휴무)와 "트러블슈팅 전용 일일"(D,
+    simple-tech-fix, 매일, 휴무 없음). 한쪽이 call_claude() 등에서
+    실패(SystemExit 포함)해도 다른 쪽이나 이미 만들어진 파일의 커밋을
+    막으면 안 되므로, 이 함수 자체는 예외를 삼키지 않고 그대로 올려보내고
+    (그래야 실패 원인이 로그에 그대로 남는다) 호출부(main())가 _run_arm()으로
+    감싸서 격리한다."""
     raw_output = call_claude(prompt, enable_web_search=not manual)
 
     if manual:
-        title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=topic)
+        title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=fallback_title)
         sources = []
     else:
-        title, tags, keyword, sources, body = parse_niche_output(raw_output, fallback_title=topic)
+        title, tags, keyword, sources, body = parse_niche_output(raw_output, fallback_title=fallback_title)
 
     today = datetime.date.today()
     slug = slugify(title)
@@ -1312,7 +1313,7 @@ def main() -> None:
         image_block = build_product_image_block(product_photo)
         body = image_block + body
     elif manual:
-        photo = find_stock_photo(image_query or keyword or topic)
+        photo = find_stock_photo(image_query or keyword or fallback_title)
         body = build_image_block(photo) + body
     else:
         # 새 니치: SOURCES로 받은 공식 페이지들을 직접 캡처해서 실제 화면
@@ -1323,7 +1324,8 @@ def main() -> None:
         photos = build_screenshot_photos(sources, slug)
         if not photos:
             print("공식 페이지 캡처가 하나도 성공하지 못해 Unsplash 대표 이미지로 대신합니다.")
-            stock = find_stock_photo(f"{niche_topic['cluster_name']} software" if niche_topic else keyword or topic)
+            stock_query = f"{niche_topic['cluster_name']} software" if niche_topic else (keyword or fallback_title)
+            stock = find_stock_photo(stock_query)
             if stock:
                 stock = dict(stock, kind="unsplash")
                 photos = [stock]
@@ -1357,26 +1359,99 @@ def main() -> None:
 
     print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
 
-    if not manual and niche_topic and niche_topic["cluster"] == "D":
-        # 트러블슈팅 글은 new-maind가 아니라 두 번째 블로그로 보낸다
-        # (SECOND_BLOG_URL 위 주석 참고).
-        second_blog_id = resolve_blog_id_by_url(SECOND_BLOG_URL)
-        if second_blog_id:
-            post_to_blogger(safe_title, full_body, blog_id=second_blog_id)
-        else:
-            print(
-                f"{SECOND_BLOG_URL} 블로그 ID를 찾지 못해 이번 트러블슈팅 글은 "
-                "Blogger에 발행하지 못했습니다 (GitHub Pages에는 정상 발행됨)."
-            )
-    else:
-        post_to_blogger(safe_title, full_body)
-    sync_blogger_static_pages()
-    sync_second_blogger_static_pages()
+    post_to_blogger(safe_title, full_body, blog_id=blog_id)
 
     if manual:
         consume_manual_topic(manual)
     else:
         save_used_topic_id(niche_topic["id"])
+
+
+def _run_arm(label: str, fn) -> bool:
+    """한 갈래(지정 발행/일반 니치/트러블슈팅 전용 일일) 실행을 감싸서, 이
+    안에서 나는 어떤 오류(call_claude()의 sys.exit 포함)도 다른 갈래의
+    실행이나 이미 성공적으로 만들어진 파일의 커밋을 막지 않게 한다 -
+    main()이 이제 한 번 실행에 최대 두 번 글을 생성하므로, 한쪽이 API
+    레이트리밋 등으로 실패해도 이미 성공한 다른 쪽까지 통째로 날아가면
+    안 된다. 성공하면 True를 돌려준다."""
+    try:
+        fn()
+        return True
+    except SystemExit as e:
+        print(f"[{label}] 오류로 이번 갈래는 건너뜁니다: {e}")
+        return False
+    except Exception as e:
+        print(f"[{label}] 예상치 못한 오류로 이번 갈래는 건너뜁니다: {e}")
+        return False
+
+
+def main() -> None:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
+
+    if os.environ.get("RUN_FIX_KNOWN_POST_TITLE") == "true":
+        # 일회성 유지보수 모드: 정상 발행 흐름을 타지 않고 이 작업만 하고 끝낸다
+        # (workflow_dispatch로만 켜지며, 매일 스케줄 실행에는 영향 없음).
+        fix_known_post_title()
+        return
+
+    manual = load_manual_topic()
+
+    # 요일 판정은 실행 시각(UTC)이 아니라 실제 발행되는 KST 기준이어야 한다 -
+    # 이 워크플로는 22:00 UTC(=07:00 KST 다음날)에 돌기 때문에, UTC 그대로
+    # 쓰면 요일이 하루 밀린다.
+    kst_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+    forced_cluster = os.environ.get("FORCE_NICHE_CLUSTER", "").strip()
+
+    results: list[tuple[str, bool]] = []
+
+    if manual:
+        def _run_manual():
+            recent_titles = get_recent_titles()
+            prompt = build_product_prompt(manual, recent_titles)
+            _run_generation(prompt, manual["topic"], manual=manual)
+
+        results.append(("manual", _run_arm("manual", _run_manual)))
+    else:
+        # 일반 니치(A/B/C/E) - 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후
+        # 매일 발행 대신 화/일을 휴무일로 두고 주 5회만 발행한다
+        # (REST_WEEKDAYS). 트러블슈팅(D)은 simple-tech-fix에 매일 따로
+        # 발행하므로(아래) 이 후보 풀에서는 제외한다.
+        if forced_cluster or kst_now.weekday() not in REST_WEEKDAYS:
+            def _run_general():
+                recent_titles = get_recent_titles()
+                general_topic = select_niche_topic(exclude_clusters=("D",))
+                prompt_builder = NICHE_FORMAT_PROMPT_BUILDERS[general_topic["format"]]
+                prompt = prompt_builder(general_topic, recent_titles)
+                _run_generation(prompt, general_topic["keyword"], niche_topic=general_topic)
+
+            results.append(("general(new-maind)", _run_arm("general(new-maind)", _run_general)))
+        else:
+            weekday_kr = "월화수목금토일"[kst_now.weekday()]
+            print(
+                f"오늘은 휴무일입니다 (KST {kst_now.date().isoformat()} {weekday_kr}요일) - "
+                "발행 빈도를 줄이고 품질에 집중하기 위해 new-maind(A/B/C/E) 발행은 건너뜁니다."
+            )
+
+        # 트러블슈팅(D) -> simple-tech-fix는 요청대로 매일(휴무일에도) 발행한다.
+        # 블로그 ID를 먼저 조회해서, 실패하면(권한 없음 등) Claude 호출 자체를
+        # 하지 않고 건너뛴다 - 어차피 발행 못 할 글에 API 비용을 쓸 필요가 없다.
+        def _run_daily_tech_fix():
+            second_blog_id = resolve_blog_id_by_url(SECOND_BLOG_URL)
+            if not second_blog_id:
+                sys.exit(f"{SECOND_BLOG_URL} 블로그 ID를 찾지 못해 오늘의 트러블슈팅 글 발행을 건너뜁니다.")
+            recent_titles = get_recent_titles()
+            d_topic = select_niche_topic(include_clusters=("D",))
+            prompt = build_troubleshoot_prompt(d_topic, recent_titles)
+            _run_generation(prompt, d_topic["keyword"], niche_topic=d_topic, blog_id=second_blog_id)
+
+        results.append(("daily(simple-tech-fix)", _run_arm("daily(simple-tech-fix)", _run_daily_tech_fix)))
+
+    sync_blogger_static_pages()
+    sync_second_blogger_static_pages()
+
+    if results and not any(ok for _, ok in results):
+        sys.exit(f"이번 실행의 모든 발행 갈래가 실패했습니다: {[label for label, _ in results]}")
 
 
 if __name__ == "__main__":

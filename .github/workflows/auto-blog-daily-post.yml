@@ -5,7 +5,7 @@ name: Auto Blog Daily Post
 # 자동으로 실행되지 않고, Actions 탭에서 수동 실행(workflow_dispatch)만 가능합니다.
 on:
   schedule:
-    - cron: "0 22 * * *" # 매일 UTC 22:00 = 한국시간(KST) 오전 7시 (REST_WEEKDAYS면 스크립트가 스스로 건너뜀)
+    - cron: "0 22 * * *" # 매일 UTC 22:00 = 한국시간(KST) 오전 7시. new-maind(A/B/C/E)는 REST_WEEKDAYS(화/일)에 스스로 건너뛰고, simple-tech-fix(D)는 매일 돈다
   workflow_dispatch:
     inputs:
       fix_known_post_title:

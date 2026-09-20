@@ -192,6 +192,166 @@
     "content_type": "evergreen"
   },
   {
+    "id": "d7",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Zoom Screen Share Not Working: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d8",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Zoom Camera Not Working: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d9",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Zoom Audio Echo or Feedback: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d10",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Google Meet Camera Not Working: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d11",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Can't Hear Audio in Google Meet: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d12",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Slack Messages Not Sending: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d13",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Slack Huddle Audio Not Working: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d14",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Notion Not Syncing Across Devices: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d15",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Notion Duplicate Pages After Sync: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d16",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Google Docs Comments Not Showing Up: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d17",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Google Calendar Not Syncing with Outlook: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d18",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Microsoft Teams Microphone Not Working: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d19",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Microsoft Teams Screen Share Not Working: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d20",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Dropbox Not Syncing: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d21",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "OneDrive Not Syncing on Windows or Mac: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d22",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Trello Cards Not Loading: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d23",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Asana Notifications Not Working: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d24",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Calendly Not Syncing with Google Calendar: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d25",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Loom Recording Not Uploading: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
+    "id": "d26",
+    "cluster": "D",
+    "cluster_name": "Remote-Work Tool Troubleshooting",
+    "keyword": "Airtable Not Syncing or Updating: How to Fix It",
+    "format": "troubleshoot",
+    "content_type": "evergreen"
+  },
+  {
     "id": "e1",
     "cluster": "E",
     "cluster_name": "Productivity Software Comparisons",
