@@ -1179,11 +1179,13 @@ def main() -> None:
     # 쓰면 요일이 하루 밀린다.
     kst_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
 
-    if not manual and kst_now.weekday() in REST_WEEKDAYS:
+    forced_cluster = os.environ.get("FORCE_NICHE_CLUSTER", "").strip()
+    if not manual and not forced_cluster and kst_now.weekday() in REST_WEEKDAYS:
         # 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후 매일 발행 대신 발행
-        # 빈도를 줄이기로 했다. 지정 발행(manual)은 예외로 그대로 진행하고,
-        # 그 외 니치 글만 화/일에 건너뛴다. Claude API 호출 전에 바로
-        # return해서 비용도 함께 아낀다.
+        # 빈도를 줄이기로 했다. 지정 발행(manual)과 FORCE_NICHE_CLUSTER
+        # 수동 검증은 예외로 그대로 진행하고(검증하려고 일부러 켠 건데
+        # 휴무일이라고 막히면 안 되므로), 그 외 니치 글만 화/일에 건너뛴다.
+        # Claude API 호출 전에 바로 return해서 비용도 함께 아낀다.
         weekday_kr = "월화수목금토일"[kst_now.weekday()]
         print(f"오늘은 휴무일입니다 (KST {kst_now.date().isoformat()} {weekday_kr}요일) - 발행 빈도를 줄이고 품질에 집중하기 위해 이번 발행은 건너뜁니다.")
         return
