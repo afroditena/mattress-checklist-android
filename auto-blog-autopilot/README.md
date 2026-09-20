@@ -191,6 +191,12 @@ Blogger API를 쓰기 때문에 확실하게 자동화되지만, **설정 과정
 등) 해당 회차의 Blogger 발행만 조용히 건너뛰고(GitHub Pages는 정상 발행),
 로그에 이유가 남습니다.
 
+이 블로그에도 new-maind와 똑같이 개인정보처리방침·소개 페이지가 자동으로
+동기화됩니다(`sync_second_blogger_static_pages()`) - 매 실행마다(클러스터
+D가 아닌 날에도) 블로그 ID를 조회해서 페이지 내용을 최신 상태로 맞춥니다.
+내용은 `SECOND_BLOG_PRIVACY_PAGE_MD`/`SECOND_BLOG_ABOUT_PAGE_MD_TEMPLATE`
+상수에서 이 블로그(트러블슈팅 전용)에 맞게 따로 관리합니다.
+
 다른 클러스터도 별도 블로그로 보내고 싶으면, `generate_post.py`에서
 `SECOND_BLOG_URL`처럼 상수를 하나 더 만들고 `main()`의 클러스터 분기
 (`niche_topic["cluster"] == "D"` 부분)에 조건을 추가하면 됩니다. 다른 구글

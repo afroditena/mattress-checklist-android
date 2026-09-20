@@ -1011,13 +1011,72 @@ Questions or feedback about this blog can be left as a comment on any post.
 """
 
 
-def sync_blogger_static_pages() -> None:
-    """개인정보처리방침·소개 페이지를 Blogger에도 만들어 두고, 이미 있으면
-    최신 내용으로 갱신한다(제목 기준으로 찾아 PATCH) - 그래서 이 콘텐츠를
-    바꿀 때마다 다음 발행 때 Blogger 쪽도 자동으로 맞춰진다. 애드센스는
-    실제로 신청하는 도메인(Blogger)에 이 페이지들이 있어야 심사가 되므로,
-    GitHub Pages(docs/privacy.md, docs/about.md)와 같은 내용을 유지한다.
-    실패해도 본 발행 흐름을 막지 않는다."""
+SECOND_BLOG_PRIVACY_PAGE_TITLE = "Privacy Policy"
+SECOND_BLOG_ABOUT_PAGE_TITLE = "About"
+
+SECOND_BLOG_PRIVACY_PAGE_MD = """\
+This page explains what information is collected from visitors to this blog and how it's used.
+
+## 1. Cookies and Visit Data
+
+This blog may use Google Analytics to analyze visit statistics. Google Analytics uses cookies to collect non-identifying statistics such as pages visited, time on page, and device type. It does not collect personally identifying information (name, contact details, etc.).
+
+## 2. Advertising
+
+This blog may display third-party ads, including Google AdSense. Google and other ad providers may use cookies to show personalized ads based on your prior visits.
+
+- You can learn how Google uses cookies for advertising at the [Google Ads Policy](https://policies.google.com/technologies/ads) page.
+- You can opt out of personalized ads at [Google Ads Settings](https://adssettings.google.com).
+
+## 3. Affiliate Disclosure
+
+This blog currently carries no affiliate or referral links. If that changes in the future, any affiliate relationship will be disclosed directly in the relevant post and reflected here.
+
+## 4. Content and How It's Made
+
+This blog is run by a single independent operator, and posts are written with the help of AI automation tools, but the operator decides what topics to cover and takes final responsibility for what's published. Every fix is checked against the tool's own official support/help-center page before publishing, rather than a forum post or a third-party tech blog.
+
+## 5. Contact
+
+If you have questions about this privacy policy or how this blog is run, please leave a comment on any post.
+
+## 6. Changes
+
+This policy may change as the service or applicable law changes; updates will be reflected on this page.
+"""
+
+SECOND_BLOG_ABOUT_PAGE_MD_TEMPLATE = """\
+## What This Blog Covers
+
+This blog covers quick fixes for common problems with the remote-work tools people use every day - Zoom, Google Meet, Google Drive, Slack, Notion, and Google Docs. Each post targets one specific problem (a stuck sync, a muted mic, a missing notification) with a fix you can try right away, ordered from the most common cause to the least.
+
+## About the Operator
+
+This blog is run by a single independent operator, as a focused companion to a broader blog about AI-powered productivity tools. The operator decides what topics to cover, and posts are written with the help of AI automation tools, but final responsibility for what's published - and whether it's accurate - rests with the operator, not the AI.
+
+## How Content Is Made
+
+- Every fix is checked against the tool's own official support/help-center page before publishing, rather than a random forum post or a third-party tech blog.
+- Screenshots used in posts are captured directly from those official public pages.
+- Posts stay short and specific: the fastest fix first, then less common causes, then how to prevent it next time.
+
+This blog currently carries no affiliate or referral links. See the [Privacy Policy]({privacy_url}) page for more detail.
+
+## Contact
+
+Questions or feedback about this blog can be left as a comment on any post.
+"""
+
+
+def _sync_static_pages_for_blog(
+    blog_id: str, privacy_title: str, privacy_md: str, about_title: str, about_md_template: str
+) -> None:
+    """주어진 blog_id의 블로그에 개인정보처리방침·소개 페이지를 만들어 두고,
+    이미 있으면 최신 내용으로 갱신한다(제목 기준으로 찾아 PATCH) - 그래서 이
+    콘텐츠를 바꿀 때마다 다음 발행 때 Blogger 쪽도 자동으로 맞춰진다. 실패해도
+    본 발행 흐름을 막지 않는다. sync_blogger_static_pages()/
+    sync_second_blogger_static_pages()가 각자의 블로그 id와 페이지 내용으로
+    이 함수를 호출한다."""
     if not blogger_configured():
         return
 
@@ -1031,7 +1090,7 @@ def sync_blogger_static_pages() -> None:
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json; charset=utf-8",
     }
-    pages_url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/pages/"
+    pages_url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/pages/"
 
     try:
         req = urllib.request.Request(pages_url, headers=headers)
@@ -1067,10 +1126,41 @@ def sync_blogger_static_pages() -> None:
             print(f"Blogger {title} 페이지 {verb} 실패: {e}")
         return (existing_page or {}).get("url")
 
-    privacy_url = _upsert_page(BLOGGER_PRIVACY_PAGE_TITLE, BLOGGER_PRIVACY_PAGE_MD)
+    privacy_url = _upsert_page(privacy_title, privacy_md)
+    about_md = about_md_template.format(privacy_url=privacy_url or "https://www.blogger.com")
+    _upsert_page(about_title, about_md)
 
-    about_md = BLOGGER_ABOUT_PAGE_MD_TEMPLATE.format(privacy_url=privacy_url or "https://www.blogger.com")
-    _upsert_page(BLOGGER_ABOUT_PAGE_TITLE, about_md)
+
+def sync_blogger_static_pages() -> None:
+    """new-maind 블로그(BLOGGER_BLOG_ID)의 개인정보처리방침·소개 페이지를
+    동기화한다. 애드센스는 실제로 신청하는 도메인(Blogger)에 이 페이지들이
+    있어야 심사가 되므로, GitHub Pages(docs/privacy.md, docs/about.md)와
+    같은 내용을 유지한다."""
+    _sync_static_pages_for_blog(
+        BLOGGER_BLOG_ID,
+        BLOGGER_PRIVACY_PAGE_TITLE,
+        BLOGGER_PRIVACY_PAGE_MD,
+        BLOGGER_ABOUT_PAGE_TITLE,
+        BLOGGER_ABOUT_PAGE_MD_TEMPLATE,
+    )
+
+
+def sync_second_blogger_static_pages() -> None:
+    """simple-tech-fix 블로그의 개인정보처리방침·소개 페이지를 동기화한다.
+    블로그 ID는 저장해두지 않고 매번 URL로 새로 조회한다(같은 구글 계정
+    소유라 별도 시크릿이 필요 없다 - resolve_blog_id_by_url 참고). 조회
+    실패(권한 없음/블로그 없음 등)해도 본 발행 흐름을 막지 않는다."""
+    second_blog_id = resolve_blog_id_by_url(SECOND_BLOG_URL)
+    if not second_blog_id:
+        print(f"{SECOND_BLOG_URL} 블로그 ID를 찾지 못해 정적 페이지 동기화를 건너뜁니다.")
+        return
+    _sync_static_pages_for_blog(
+        second_blog_id,
+        SECOND_BLOG_PRIVACY_PAGE_TITLE,
+        SECOND_BLOG_PRIVACY_PAGE_MD,
+        SECOND_BLOG_ABOUT_PAGE_TITLE,
+        SECOND_BLOG_ABOUT_PAGE_MD_TEMPLATE,
+    )
 
 
 def fix_known_post_title() -> None:
@@ -1281,6 +1371,7 @@ def main() -> None:
     else:
         post_to_blogger(safe_title, full_body)
     sync_blogger_static_pages()
+    sync_second_blogger_static_pages()
 
     if manual:
         consume_manual_topic(manual)
