@@ -15,6 +15,14 @@ on:
           (fix_known_post_title() 참고). 평소엔 항상 false로 두면 됨.
         required: false
         default: "false"
+      force_niche_cluster:
+        description: >-
+          비워두면 평소대로 클러스터 가중치 기반 가중 무작위로 선택.
+          A/B/C/D/E 중 하나를 넣으면 그 클러스터로만 강제 선택 - 특정
+          포맷이나(예: D는 두 번째 Blogger 블로그로 라우팅됨) 클러스터를
+          미리 확인해보고 싶을 때 사용.
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -46,6 +54,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RUN_FIX_KNOWN_POST_TITLE: ${{ github.event.inputs.fix_known_post_title || 'false' }}
+          FORCE_NICHE_CLUSTER: ${{ github.event.inputs.force_niche_cluster || '' }}
           # 아래 4개는 구글 Blogger 동시 발행용 (선택, 미설정이면 자동으로 건너뜀)
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}

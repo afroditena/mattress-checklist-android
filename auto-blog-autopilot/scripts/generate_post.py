@@ -151,11 +151,24 @@ def select_niche_topic() -> dict:
     풀에서 다시 고른다(콘텐츠는 결국 새로고침할 수 있으니 영구 배제는
     아니다). 선택한 주제의 id는 main()이 발행에 성공한 뒤에
     save_used_topic_id()로 기록한다(여기서는 기록하지 않는다 - 실패한
-    회차까지 "사용됨"으로 남으면 안 되므로)."""
+    회차까지 "사용됨"으로 남으면 안 되므로).
+
+    FORCE_NICHE_CLUSTER 환경변수(A~E)가 설정돼 있으면 그 클러스터로만
+    후보를 좁힌다 - workflow_dispatch 수동 검증용 (예: 클러스터 D는 가중치가
+    높아도 확률적으로만 뽑혀서, 두 번째 Blogger 블로그 라우팅을 미리 확인해보고
+    싶을 때 쓴다). 평소 스케줄 실행에는 영향 없다."""
     topics = load_niche_topics()
     used_ids = set(load_used_topic_ids())
 
-    candidates = [t for t in topics if t["id"] not in used_ids] or topics
+    forced_cluster = os.environ.get("FORCE_NICHE_CLUSTER", "").strip().upper()
+    pool = [t for t in topics if t["cluster"] == forced_cluster] if forced_cluster else topics
+    if forced_cluster and not pool:
+        print(f"FORCE_NICHE_CLUSTER='{forced_cluster}'에 해당하는 주제가 없어 무시합니다.")
+        pool = topics
+    elif forced_cluster:
+        print(f"FORCE_NICHE_CLUSTER로 강제 지정됨: {forced_cluster}")
+
+    candidates = [t for t in pool if t["id"] not in used_ids] or pool
     weights = [NICHE_CLUSTER_WEIGHT.get(t["cluster"], 1) for t in candidates]
     chosen = random.choices(candidates, weights=weights, k=1)[0]
     print(
