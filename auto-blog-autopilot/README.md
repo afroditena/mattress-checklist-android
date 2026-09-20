@@ -68,7 +68,10 @@
    삽입" 참고).
 5. 자동으로 커밋·푸시하면, GitHub Pages가 자동으로 사이트를 다시 빌드해서
    글이 공개됩니다. 구글 Blogger 인증 정보가 설정돼 있으면 같은 글을
-   Blogger에도 동시 발행합니다 (아래 "5. Blogger 동시 발행" 참고).
+   Blogger에도 동시 발행합니다 — 클러스터 D(트러블슈팅) 글은 new-maind가
+   아니라 같은 구글 계정 소유의 별도 블로그(simple-tech-fix.blogspot.com)로,
+   나머지 클러스터는 new-maind로 갑니다 (아래 "5. Blogger 동시 발행" 참고).
+   GitHub Pages는 이 분기와 무관하게 항상 전체 클러스터를 보관합니다.
 6. 최근 글 제목을 프롬프트에 같이 넘겨서 내용이 겹치지 않게 하고, 이번에
    고른 주제 id를 `data/used_topic_ids.json`에 남겨서 같은 주제가 당분간
    반복되지 않게 합니다.
@@ -171,6 +174,28 @@ Blogger API를 쓰기 때문에 확실하게 자동화되지만, **설정 과정
 이 4개가 모두 등록되면, 다음 자동 발행부터 같은 글이 Blogger에도 함께 올라갑니다.
 하나라도 비어 있으면 스크립트가 자동으로 Blogger 발행만 건너뛰고 GitHub Pages
 발행은 평소대로 계속됩니다 (즉, 이 설정을 안 해도 기존 기능은 전혀 영향 없습니다).
+
+#### 5-1. 클러스터별로 다른 Blogger 블로그에 발행하기 (현재: 클러스터 D)
+
+2026-09-20부터, 클러스터 D(Remote-Work Tool Troubleshooting) 글은 위
+`BLOGGER_BLOG_ID`(new-maind)가 아니라 같은 구글 계정 소유의 다른 블로그
+(`SECOND_BLOG_URL` 상수, 현재 `https://simple-tech-fix.blogspot.com/`)로
+자동 발행됩니다 — 블로그 이름/니치가 잘 맞고, 같은 글이 두 블로그에 중복
+발행되는 걸 피하기 위해서입니다. GitHub Pages(docs/_posts)는 이 분기와
+무관하게 항상 전체 클러스터를 그대로 보관하는 단일 아카이브로 남습니다.
+
+**별도 GitHub Secrets 등록이 필요 없습니다** — 같은 구글 계정 소유 블로그라면
+위 4개 시크릿(특히 `GOOGLE_REFRESH_TOKEN`)이 이미 접근 권한을 갖고 있어서,
+`resolve_blog_id_by_url()`이 Blogger API로 URL만 보고 블로그 ID를 매번
+자동으로 조회합니다. 이 블로그가 없거나 접근 권한이 없으면(다른 계정 소유
+등) 해당 회차의 Blogger 발행만 조용히 건너뛰고(GitHub Pages는 정상 발행),
+로그에 이유가 남습니다.
+
+다른 클러스터도 별도 블로그로 보내고 싶으면, `generate_post.py`에서
+`SECOND_BLOG_URL`처럼 상수를 하나 더 만들고 `main()`의 클러스터 분기
+(`niche_topic["cluster"] == "D"` 부분)에 조건을 추가하면 됩니다. 다른 구글
+계정 소유의 블로그를 추가하려면 그 계정으로 6단계 OAuth 절차를 다시 밟아
+별도 시크릿(예: `GOOGLE_REFRESH_TOKEN_2`)으로 등록해야 합니다.
 
 ### 6. (선택) 화면 캡처 실패 시 대체용 무료 사진
 

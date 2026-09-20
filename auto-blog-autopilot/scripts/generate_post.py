@@ -25,6 +25,12 @@
   파일로 저장한다.
 - 구글 Blogger API 인증 정보(GOOGLE_CLIENT_ID 등)가 설정되어 있으면,
   같은 글을 Blogger에도 동시에 자동 발행한다 (설정 안 돼 있으면 조용히 건너뜀).
+  2026-09-20부터: 클러스터 D(트러블슈팅) 글만 new-maind가 아니라 같은
+  구글 계정 소유의 별도 블로그(SECOND_BLOG_URL,
+  simple-tech-fix.blogspot.com)로 보낸다 - 블로그 이름/니치가 잘 맞고
+  같은 글이 두 블로그에 중복 발행되는 걸 피하기 위해서다. GitHub
+  Pages(docs/_posts)는 이 분기와 무관하게 항상 전체 클러스터를 보관하는
+  단일 아카이브로 남는다 (resolve_blog_id_by_url() 참고).
 - 이미지는 Unsplash 일반 스톡사진 대신, Claude가 SOURCES로 알려준 공식
   페이지(가격/지원문서 등, 로그인 불필요)를 Playwright로 직접 캡처해서
   쓴다 - "직접 제작/캡처/AI생성/명확한 라이선스만" 원칙상 소프트웨어
@@ -854,12 +860,18 @@ def markdown_to_html(text: str) -> str:
     return "\n".join(html_lines)
 
 
-def post_to_blogger(title: str, body_markdown: str) -> None:
-    """설정돼 있으면 같은 글을 구글 Blogger에도 발행한다. 실패해도 GitHub Pages
-    발행 자체를 막지 않도록, 여기서 나는 오류는 절대 sys.exit 하지 않고 그냥 건너뛴다."""
+def post_to_blogger(title: str, body_markdown: str, blog_id: str | None = None) -> None:
+    """설정돼 있으면 같은 글을 구글 Blogger에도 발행한다. blog_id를 안 주면
+    기본 블로그(BLOGGER_BLOG_ID, new-maind)에 발행한다 - 클러스터 D
+    (트러블슈팅) 글을 두 번째 블로그(SECOND_BLOG_URL)에 발행할 때는
+    resolve_blog_id_by_url()로 알아낸 id를 넘긴다 (main() 참고). 실패해도
+    GitHub Pages 발행 자체를 막지 않도록, 여기서 나는 오류는 절대 sys.exit
+    하지 않고 그냥 건너뛴다."""
     if not blogger_configured():
         print("Blogger 인증 정보가 없어 Blogger 발행은 건너뜁니다.")
         return
+
+    target_blog_id = blog_id or BLOGGER_BLOG_ID
 
     try:
         access_token = get_google_access_token()
@@ -868,7 +880,7 @@ def post_to_blogger(title: str, body_markdown: str) -> None:
         return
 
     payload = json.dumps({"title": title, "content": markdown_to_html(body_markdown)}).encode("utf-8")
-    url = f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}/posts/"
+    url = f"https://www.googleapis.com/blogger/v3/blogs/{target_blog_id}/posts/"
     req = urllib.request.Request(
         url,
         data=payload,
@@ -886,6 +898,46 @@ def post_to_blogger(title: str, body_markdown: str) -> None:
         print(f"Blogger 발행 실패, 이번 회차는 건너뜁니다: {e.code} {e.reason}: {e.read().decode('utf-8', 'replace')}")
     except urllib.error.URLError as e:
         print(f"Blogger 발행 실패, 이번 회차는 건너뜁니다: {e}")
+
+
+# 클러스터 D(Remote-Work Tool Troubleshooting) 글은 new-maind가 아니라 같은
+# 구글 계정 소유의 별도 블로그로 보낸다 - 블로그 이름·니치가 잘 맞고, 같은
+# 글을 두 블로그에 중복 발행하면 애드센스가 "중복 콘텐츠"로 볼 위험도 피할
+# 수 있다. GitHub Pages(docs/_posts)는 이 분기와 무관하게 항상 전체
+# 클러스터를 그대로 보관하는 단일 아카이브로 남는다.
+SECOND_BLOG_URL = "https://simple-tech-fix.blogspot.com/"
+
+
+def resolve_blog_id_by_url(blog_url: str) -> str | None:
+    """블로그 URL로 Blogger 블로그 ID를 조회한다. 같은 구글 계정(그래서
+    GOOGLE_REFRESH_TOKEN이 이미 접근 권한을 가짐) 소유 블로그라면 별도
+    시크릿 설정 없이 기존 Blogger 인증 정보로 조회할 수 있다. 실패(권한
+    없음/네트워크 오류/미설정 등)하면 None을 돌려주고, 호출부가 해당
+    발행만 조용히 건너뛴다."""
+    if not blogger_configured():
+        return None
+
+    try:
+        access_token = get_google_access_token()
+    except (urllib.error.URLError, urllib.error.HTTPError, KeyError, ValueError) as e:
+        print(f"{blog_url} 블로그 ID 조회를 위한 토큰 갱신 실패: {e}")
+        return None
+
+    url = f"https://www.googleapis.com/blogger/v3/blogs/byurl?url={urllib.parse.quote(blog_url, safe='')}"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            payload = json.loads(resp.read())
+        blog_id = payload.get("id")
+        if not blog_id:
+            print(f"{blog_url}의 블로그 ID를 응답에서 찾지 못했습니다: {payload}")
+        return blog_id
+    except urllib.error.HTTPError as e:
+        print(f"{blog_url} 블로그 ID 조회 실패: {e.code} {e.reason}: {e.read().decode('utf-8', 'replace')}")
+        return None
+    except urllib.error.URLError as e:
+        print(f"{blog_url} 블로그 ID 조회 실패: {e}")
+        return None
 
 
 BLOGGER_PRIVACY_PAGE_TITLE = "Privacy Policy"
@@ -1200,7 +1252,19 @@ def main() -> None:
 
     print(f"생성 완료: {post_path.relative_to(PROJECT_DIR.parent)}")
 
-    post_to_blogger(safe_title, full_body)
+    if not manual and niche_topic and niche_topic["cluster"] == "D":
+        # 트러블슈팅 글은 new-maind가 아니라 두 번째 블로그로 보낸다
+        # (SECOND_BLOG_URL 위 주석 참고).
+        second_blog_id = resolve_blog_id_by_url(SECOND_BLOG_URL)
+        if second_blog_id:
+            post_to_blogger(safe_title, full_body, blog_id=second_blog_id)
+        else:
+            print(
+                f"{SECOND_BLOG_URL} 블로그 ID를 찾지 못해 이번 트러블슈팅 글은 "
+                "Blogger에 발행하지 못했습니다 (GitHub Pages에는 정상 발행됨)."
+            )
+    else:
+        post_to_blogger(safe_title, full_body)
     sync_blogger_static_pages()
 
     if manual:
