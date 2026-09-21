@@ -5,7 +5,10 @@ name: Auto Blog Daily Post
 # 자동으로 실행되지 않고, Actions 탭에서 수동 실행(workflow_dispatch)만 가능합니다.
 on:
   schedule:
-    - cron: "0 22 * * *" # 매일 UTC 22:00 = 한국시간(KST) 오전 7시. new-maind(A/B/C/E)는 REST_WEEKDAYS(화/일)에 스스로 건너뛰고, simple-tech-fix(D)는 매일 돈다
+    - cron: "0 22 * * *" # UTC 22:00 = 한국시간(KST) 오전 7시 (다음날) - new-maind(A/B/C/E) 전용, REST_WEEKDAYS(화/일)엔 스스로 건너뜀
+    - cron: "0 0 * * *"  # UTC 00:00 = KST 오전 9시 - simple-tech-fix(D) #1
+    - cron: "0 3 * * *"  # UTC 03:00 = KST 낮 12시 - simple-tech-fix(D) #2
+    - cron: "0 8 * * *"  # UTC 08:00 = KST 오후 5시 - simple-tech-fix(D) #3
   workflow_dispatch:
     inputs:
       fix_known_post_title:
@@ -21,6 +24,15 @@ on:
           A/B/C/D/E 중 하나를 넣으면 그 클러스터로만 강제 선택 - 특정
           포맷이나(예: D는 두 번째 Blogger 블로그로 라우팅됨) 클러스터를
           미리 확인해보고 싶을 때 사용.
+        required: false
+        default: ""
+      run_arms:
+        description: >-
+          비워두면 이번 실행에서 일반 니치(new-maind)와 트러블슈팅 전용
+          일일(simple-tech-fix) 갈래를 둘 다 실행. "general"이면 new-maind
+          갈래만, "tech_fix"면 simple-tech-fix 갈래만 강제 지정 - 수동
+          검증용. 스케줄(cron) 실행은 이 값과 무관하게 어느 cron이 켰는지로
+          자동 결정됨(아래 RUN_ARMS 계산 참고).
         required: false
         default: ""
 
@@ -55,6 +67,18 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RUN_FIX_KNOWN_POST_TITLE: ${{ github.event.inputs.fix_known_post_title || 'false' }}
           FORCE_NICHE_CLUSTER: ${{ github.event.inputs.force_niche_cluster || '' }}
+          # 스케줄(cron) 실행이면 어느 cron이 켰는지로 갈래를 자동 결정하고
+          # (아래 4개 cron 중 "0 22 * * *"만 new-maind 전용, 나머지 3개는
+          # simple-tech-fix 전용), workflow_dispatch 수동 실행이면 입력값을
+          # 그대로 쓴다(비어있으면 둘 다 실행). generate_post.py의
+          # RUN_ARMS 처리 참고.
+          RUN_ARMS: >-
+            ${{
+              github.event.schedule == '0 22 * * *' && 'general'
+              || (github.event.schedule == '0 0 * * *' || github.event.schedule == '0 3 * * *' || github.event.schedule == '0 8 * * *') && 'tech_fix'
+              || github.event.inputs.run_arms
+              || ''
+            }}
           # 아래 4개는 구글 Blogger 동시 발행용 (선택, 미설정이면 자동으로 건너뜀)
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}

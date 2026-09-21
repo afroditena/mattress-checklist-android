@@ -23,13 +23,15 @@
 
 ## 어떻게 동작하나요?
 
-1. 매일 (KST 오전 7시) GitHub Actions가 실행되고, 한 번 실행에 최대 두
-   갈래가 각각 돌아갑니다 - "일반 니치"(A/B/C/E, new-maind)와 "트러블슈팅
-   전용 일일"(D만, simple-tech-fix). 일반 니치는 화요일/일요일이
-   `REST_WEEKDAYS`로 지정된 휴무일이라 지정 발행(아래 4번)이 없는 한
-   건너뛰지만(매일 발행 대신 주 5회로 품질에 집중), 트러블슈팅 전용
-   갈래는 "매일 발행해달라"는 요청에 따라 휴무일 없이 매일 돕니다. 두
-   갈래는 서로 독립적이라 한쪽이 API 오류로 실패해도 다른 쪽에는 영향이
+1. GitHub Actions가 하루 4번(KST 오전 7시/9시/낮 12시/오후 5시) 실행되고,
+   어느 시간에 켰는지에 따라 한 번에 한 갈래만 돕니다 - "일반 니치"(A/B/C/E,
+   new-maind, 오전 7시)와 "트러블슈팅 전용"(D만, simple-tech-fix, 9시/
+   12시/17시 - 하루 3번 발행해달라는 요청으로 이렇게 나눴습니다). 일반
+   니치는 화요일/일요일이 `REST_WEEKDAYS`로 지정된 휴무일이라 지정 발행
+   (아래 4번)이 없는 한 건너뛰지만(매일 발행 대신 주 5회로 품질에 집중),
+   트러블슈팅 전용 갈래는 휴무일 없이 매번 돕니다. 어느 cron이 실행을
+   켰는지로 `RUN_ARMS` 환경변수가 자동으로 정해지고(워크플로 파일 참고),
+   두 갈래는 서로 독립적이라 한쪽이 API 오류로 실패해도 다른 쪽에는 영향이
    없습니다 (자세한 내용은 "5-1. 클러스터별로 다른 Blogger 블로그에
    발행하기" 참고).
 2. `data/topics.json`에 5개 클러스터(A~E), 총 50개 키워드가 고정 풀로
@@ -182,58 +184,64 @@ Blogger API를 쓰기 때문에 확실하게 자동화되지만, **설정 과정
 하나라도 비어 있으면 스크립트가 자동으로 Blogger 발행만 건너뛰고 GitHub Pages
 발행은 평소대로 계속됩니다 (즉, 이 설정을 안 해도 기존 기능은 전혀 영향 없습니다).
 
-#### 5-1. 클러스터별로 다른 Blogger 블로그에 발행하기 (현재: 클러스터 D, 매일)
+#### 5-1. 클러스터별로 다른 Blogger 블로그·다른 빈도로 발행하기 (현재: 클러스터 D, 하루 3번)
 
 2026-09-20부터, 클러스터 D(Remote-Work Tool Troubleshooting)는 아예 완전히
-별도 갈래로 분리됐습니다. `main()`이 실행마다 최대 두 갈래를 각각 돌립니다:
+별도 갈래로 분리됐습니다. 워크플로의 cron이 4개로 늘었고(`.github/workflows/
+auto-blog-daily-post.yml`), 어느 cron이 실행을 켰는지에 따라 `RUN_ARMS`
+환경변수("general"/"tech_fix"/빈 문자열=둘 다)가 자동으로 정해져서, `main()`이
+그에 맞는 갈래만 돕니다:
 
-- **일반 니치 갈래** (A/B/C/E, `select_niche_topic(exclude_clusters=("D",))`) —
-  기존처럼 `BLOGGER_BLOG_ID`(new-maind)로 발행되고, 화/일 휴무일
-  (`REST_WEEKDAYS`)이 그대로 적용됩니다.
-- **트러블슈팅 전용 일일 갈래** (D만, `select_niche_topic(include_clusters=("D",))`) —
-  같은 구글 계정 소유의 다른 블로그(`SECOND_BLOG_URL` 상수, 현재
-  `https://simple-tech-fix.blogspot.com/`)로 발행되고, **휴무일 없이
-  매일** 돕니다 — "이 블로그는 매일 발행해달라"는 요청으로 이렇게
-  분리했습니다. 원래 있던 26개 트러블슈팅 키워드(`topics.json`의 D
-  클러스터)로는 주 5회 정도의 빈도라면 몇 주는 버티지만 매일 돌리면
-  금방 반복되므로, 이번에 Zoom/Meet/Slack/Notion/Google Docs/Google
-  Calendar 외에 Microsoft Teams·Dropbox·OneDrive·Trello·Asana·
-  Calendly·Loom·Airtable 관련 항목까지 20개를 더 추가해서 총 26개로
-  늘려뒀습니다. 그래도 계속 매일 발행하면 언젠가는 반복되니(현재
-  풀로는 대략 한 달 주기), 필요하면 `topics.json`에 D 항목을 더
+- **일반 니치 갈래** (`RUN_ARMS=general`, A/B/C/E,
+  `select_niche_topic(exclude_clusters=("D",))`) — KST 오전 7시 cron
+  하나로 돌고, 기존처럼 `BLOGGER_BLOG_ID`(new-maind)로 발행되며 화/일
+  휴무일(`REST_WEEKDAYS`)이 그대로 적용됩니다.
+- **트러블슈팅 전용 갈래** (`RUN_ARMS=tech_fix`, D만,
+  `select_niche_topic(include_clusters=("D",))`) — KST 오전 9시/낮
+  12시/오후 5시, 하루 3개의 별도 cron으로 돌고, 같은 구글 계정 소유의
+  다른 블로그(`SECOND_BLOG_URL` 상수, 현재
+  `https://simple-tech-fix.blogspot.com/`)로 **휴무일 없이 매번 새 글
+  하나씩** 발행됩니다 — "하루 3개씩(9시/12시/17시) 발행해달라"는 요청으로
+  이렇게 만들었습니다. 원래 있던 6개 트러블슈팅 키워드로는 하루 1번도
+  금방 반복되는데 하루 3번이면 더 빨리 반복되므로, Microsoft Teams·
+  Dropbox·OneDrive·Trello·Asana·Calendly·Loom·Airtable 등을 더해 총
+  26개로 늘려뒀습니다 - 그래도 하루 3개씩 쓰면 대략 열흘 정도면 한
+  바퀴 돕니다. 반복 주기를 늘리려면 `topics.json`에 D 항목을 더
   추가하세요.
 
-두 갈래는 각각 `_run_arm()`으로 감싸여 있어서, 한쪽이 API 오류(레이트리밋
-등)로 실패해도 다른 쪽이나 이미 성공한 글의 커밋을 막지 않습니다. 둘 다
+`workflow_dispatch`로 수동 실행할 때는 `run_arms` 입력으로 갈래를 지정할
+수 있습니다(비워두면 기존처럼 둘 다 실행). 두 갈래는 각각 `_run_arm()`으로
+감싸여 있어서, 한쪽이 API 오류(레이트리밋 등)로 실패해도 다른 쪽이나 이미
+성공한 글의 커밋을 막지 않습니다. 그 실행에서 시도한 갈래가 전부
 실패했을 때만 워크플로 자체가 실패로 표시되어(GitHub 실패 이메일) 눈에
-띕니다. GitHub Pages(docs/_posts)는 이 분기와 무관하게 항상 두 갈래
-전체를 보관하는 단일 아카이브로 남습니다.
+띕니다. GitHub Pages(docs/_posts)는 이 분기와 무관하게 항상 모든 갈래의
+글을 보관하는 단일 아카이브로 남습니다.
 
-**비용 참고**: 이제 평일(화/일이 아닌 날)에는 하루에 Claude API 호출이
-1번이 아니라 최대 2번(일반 니치 1 + 트러블슈팅 1) 나갑니다 — 화/일에도
-트러블슈팅 갈래는 계속 돌아서 1번은 나갑니다. 대략 이전보다 하루 평균
-호출 횟수가 늘어나는 만큼 Anthropic API 비용도 늘어난다고 보시면 됩니다.
+**비용 참고**: 이제 화/일이 아닌 날은 하루에 Claude API 호출이 총 4번
+(일반 니치 1 + 트러블슈팅 3)까지 나갑니다. 화/일에도 트러블슈팅 갈래
+3번은 그대로 나갑니다. 이전보다 하루 평균 호출 횟수가 꽤 늘어나는 만큼
+Anthropic API 비용도 그만큼 늘어난다고 보시면 됩니다.
 
 **별도 GitHub Secrets 등록이 필요 없습니다** — 같은 구글 계정 소유 블로그라면
 위 4개 시크릿(특히 `GOOGLE_REFRESH_TOKEN`)이 이미 접근 권한을 갖고 있어서,
 `resolve_blog_id_by_url()`이 Blogger API로 URL만 보고 블로그 ID를 매번
 자동으로 조회합니다. 이 블로그가 없거나 접근 권한이 없으면(다른 계정 소유
-등) 그날의 트러블슈팅 글 자체를 생성하지 않고 건너뜁니다(API 비용 절약 -
+등) 그 회차의 트러블슈팅 글 자체를 생성하지 않고 건너뜁니다(API 비용 절약 -
 resolve 실패를 먼저 확인한 뒤에 Claude를 호출하므로), 로그에 이유가 남습니다.
 
 이 블로그에도 new-maind와 똑같이 개인정보처리방침·소개 페이지가 자동으로
-동기화됩니다(`sync_second_blogger_static_pages()`) - 매 실행마다(트러블
-슈팅 갈래가 실패한 날에도) 블로그 ID를 조회해서 페이지 내용을 최신
-상태로 맞춥니다. 내용은 `SECOND_BLOG_PRIVACY_PAGE_MD`/
-`SECOND_BLOG_ABOUT_PAGE_MD_TEMPLATE` 상수에서 이 블로그(트러블슈팅
-전용)에 맞게 따로 관리합니다.
+동기화됩니다(`sync_second_blogger_static_pages()`) - 트러블슈팅 갈래를
+실행하지 않는 회차(예: 오전 7시 일반 니치 슬롯)에도 매번 블로그 ID를
+조회해서 페이지 내용을 최신 상태로 맞춥니다. 내용은
+`SECOND_BLOG_PRIVACY_PAGE_MD`/`SECOND_BLOG_ABOUT_PAGE_MD_TEMPLATE` 상수에서
+이 블로그(트러블슈팅 전용)에 맞게 따로 관리합니다.
 
 다른 클러스터도 이런 식으로 별도 블로그·별도 빈도로 분리하고 싶으면,
-`generate_post.py`의 `main()`에 있는 두 갈래(일반/트러블슈팅 전용) 패턴을
-참고해서 `select_niche_topic(include_clusters=(...))` 갈래를 하나 더
-추가하면 됩니다. 다른 구글 계정 소유의 블로그를 추가하려면 그 계정으로
-6단계 OAuth 절차를 다시 밟아 별도 시크릿(예: `GOOGLE_REFRESH_TOKEN_2`)으로
-등록해야 합니다.
+`generate_post.py`의 `main()`에 있는 두 갈래(일반/트러블슈팅 전용) 패턴과
+워크플로의 cron/`RUN_ARMS` 계산 패턴을 참고해서 갈래를 하나 더 추가하면
+됩니다. 다른 구글 계정 소유의 블로그를 추가하려면 그 계정으로 6단계 OAuth
+절차를 다시 밟아 별도 시크릿(예: `GOOGLE_REFRESH_TOKEN_2`)으로 등록해야
+합니다.
 
 ### 6. (선택) 화면 캡처 실패 시 대체용 무료 사진
 

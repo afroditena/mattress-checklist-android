@@ -28,10 +28,13 @@
   2026-09-20부터: 클러스터 D(트러블슈팅)는 아예 별도 갈래로 분리됐다 -
   new-maind(BLOGGER_BLOG_ID)로 나가는 "일반 니치" 갈래는 A/B/C/E만 후보로
   삼고(화/일 휴무일 적용), 같은 구글 계정 소유의 별도 블로그(SECOND_BLOG_URL,
-  simple-tech-fix.blogspot.com)로 나가는 "트러블슈팅 전용 일일" 갈래가
-  클러스터 D만 후보로 삼아 휴무일 없이 매일 돈다 - 이 블로그는 "매일
-  발행해달라"는 요청으로 만들어졌다. main()이 한 번 실행에 이 두 갈래를
-  각각 _run_arm()으로 감싸서 실행하므로, 한쪽이 API 오류로 실패해도
+  simple-tech-fix.blogspot.com)로 나가는 "트러블슈팅 전용" 갈래가 클러스터
+  D만 후보로 삼는다. 2026-09-21부터: 이 트러블슈팅 갈래는 "하루 3번(09/12/
+  17시 KST) 발행해달라"는 요청에 따라 워크플로의 cron이 4개로 늘었다
+  (07시=new-maind 전용, 09/12/17시=simple-tech-fix 전용) - 어느 cron이
+  이번 실행을 켰는지에 따라 RUN_ARMS 환경변수("general"/"tech_fix"/빈
+  문자열=둘 다)가 정해지고, main()이 그에 맞는 갈래만 돈다. 두 갈래는
+  각각 _run_arm()으로 감싸여 있어서, 한쪽이 API 오류로 실패해도
   (call_claude()의 sys.exit 포함) 다른 쪽이나 이미 성공한 파일의 커밋을
   막지 않는다. GitHub Pages(docs/_posts)는 이 분기와 무관하게 항상 두
   갈래 전체를 보관하는 단일 아카이브로 남는다 (resolve_blog_id_by_url(),
@@ -1403,19 +1406,31 @@ def main() -> None:
     kst_now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     forced_cluster = os.environ.get("FORCE_NICHE_CLUSTER", "").strip()
 
+    # RUN_ARMS: 스케줄(cron)이 4개로 늘어서(07/09/12/17시 KST) 이번 실행이
+    # 어느 갈래를 돌려야 하는지 구분해야 한다 - 워크플로가 어느 cron이
+    # 켰는지로 자동 계산해서 넣어준다("0 22 * * *"=general, 나머지
+    # 3개=tech_fix). 비어있으면(workflow_dispatch 기본값, 로컬 테스트 등)
+    # 둘 다 실행한다(기존 동작과 동일).
+    run_arms = os.environ.get("RUN_ARMS", "").strip().lower()
+    run_general = run_arms in ("", "general")
+    run_tech_fix = run_arms in ("", "tech_fix")
+
     results: list[tuple[str, bool]] = []
 
-    if manual:
+    if manual and run_general:
+        # 제품 지정 발행(manual)은 일반 니치 갈래의 대체재라서, 트러블슈팅
+        # 전용(simple-tech-fix) cron 슬롯(09/12/17시)에서는 아예 다루지
+        # 않는다 - 안 그러면 같은 제품 글이 하루 세 번 나가버린다.
         def _run_manual():
             recent_titles = get_recent_titles()
             prompt = build_product_prompt(manual, recent_titles)
             _run_generation(prompt, manual["topic"], manual=manual)
 
         results.append(("manual", _run_arm("manual", _run_manual)))
-    else:
+    elif run_general:
         # 일반 니치(A/B/C/E) - 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후
         # 매일 발행 대신 화/일을 휴무일로 두고 주 5회만 발행한다
-        # (REST_WEEKDAYS). 트러블슈팅(D)은 simple-tech-fix에 매일 따로
+        # (REST_WEEKDAYS). 트러블슈팅(D)은 simple-tech-fix에 따로
         # 발행하므로(아래) 이 후보 풀에서는 제외한다.
         if forced_cluster or kst_now.weekday() not in REST_WEEKDAYS:
             def _run_general():
@@ -1433,13 +1448,16 @@ def main() -> None:
                 "발행 빈도를 줄이고 품질에 집중하기 위해 new-maind(A/B/C/E) 발행은 건너뜁니다."
             )
 
-        # 트러블슈팅(D) -> simple-tech-fix는 요청대로 매일(휴무일에도) 발행한다.
-        # 블로그 ID를 먼저 조회해서, 실패하면(권한 없음 등) Claude 호출 자체를
-        # 하지 않고 건너뛴다 - 어차피 발행 못 할 글에 API 비용을 쓸 필요가 없다.
+    if run_tech_fix:
+        # 트러블슈팅(D) -> simple-tech-fix는 하루 3번(09/12/17시 KST)
+        # 발행해달라는 요청에 따라 휴무일 없이 그때마다 새 글 하나씩 낸다.
+        # 블로그 ID를 먼저 조회해서, 실패하면(권한 없음 등) Claude 호출
+        # 자체를 하지 않고 건너뛴다 - 어차피 발행 못 할 글에 API 비용을
+        # 쓸 필요가 없다.
         def _run_daily_tech_fix():
             second_blog_id = resolve_blog_id_by_url(SECOND_BLOG_URL)
             if not second_blog_id:
-                sys.exit(f"{SECOND_BLOG_URL} 블로그 ID를 찾지 못해 오늘의 트러블슈팅 글 발행을 건너뜁니다.")
+                sys.exit(f"{SECOND_BLOG_URL} 블로그 ID를 찾지 못해 이번 트러블슈팅 글 발행을 건너뜁니다.")
             recent_titles = get_recent_titles()
             d_topic = select_niche_topic(include_clusters=("D",))
             prompt = build_troubleshoot_prompt(d_topic, recent_titles)
