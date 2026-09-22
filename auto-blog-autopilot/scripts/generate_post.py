@@ -8,37 +8,59 @@
 건강/금융 출처 블록 등)는 삭제했다 - 예전 발행글(docs/_posts의 한국어 글들)은
 그대로 남아있지만 새 글은 전부 이 새 니치/포맷으로 나간다.
 
-- data/topics.json 에 5개 클러스터(A~E) x 6개, 총 30개 키워드가 고정 풀로
-  들어있다. 매 실행마다 이 중 하나를 클러스터 가중치 기반 가중 무작위로
-  고른다 - 단순 How-to(클러스터 A/B)보다 트러블슈팅(D, 경쟁도 낮아 우선)과
-  비교/대안형(C/E, 광고 친화적이고 AI Overview에 덜 깎이는 검색 유형)을
-  더 자주 고르도록 클러스터별 가중치를 둔다 (select_niche_topic() 참고).
+- data/topics.json 에 니치별 키워드 풀이 고정으로 들어있다: new-maind용
+  A/B/C/E(각 6개, 총 24개) + simple-tech-fix용 F1/F2/F3(2026-09-22부터
+  개인금융, 총 30개 - FINANCE_CLUSTERS 참고). 매 실행마다 이 중 하나를
+  클러스터 가중치 기반 가중 무작위로 고른다 - new-maind 쪽은 단순
+  How-to(클러스터 A/B)보다 비교/대안형(C/E, 광고 친화적이고 AI Overview에
+  덜 깎이는 검색 유형)을, simple-tech-fix 쪽은 Freelancer Money(F3, 가중치
+  5) > Money Basics(F1, 3) > Beginner Wealth(F2, 2) 순으로 더 자주 고르도록
+  클러스터별 가중치를 둔다(NICHE_CLUSTER_WEIGHT, select_niche_topic() 참고).
   최근 사용한 주제 id는 data/used_topic_ids.json에 남겨서, 풀을 거의 다
   돌기 전까지는 같은 주제가 다시 나오지 않게 한다.
 - 최근에 쓴 글 제목들을 함께 넘겨서 내용이 겹치지 않게 한다.
 - 포맷은 클러스터마다 다르게 정해져 있다: How-to(A/B), Alternative(C),
-  Troubleshoot(D), Comparison(E) - 각각 구조가 다른 프롬프트 빌더로 글을
-  쓴다 (build_how_to_prompt 등). 전부 Claude의 web_search 도구를 켜서,
-  실제 검색 결과(가격 페이지, 공식 지원문서 등)를 근거로 쓰고 그 출처
-  URL도 SOURCES 필드로 받는다 - 모델의 사전 지식만으로 지어내지 않도록.
+  Comparison(E), Finance Guide(F1/F2/F3) - 각각 구조가 다른 프롬프트
+  빌더로 글을 쓴다(build_how_to_prompt 등, NICHE_FORMAT_PROMPT_BUILDERS
+  참고). 전부 Claude의 web_search 도구를 켜서, 실제 검색 결과(가격 페이지,
+  공식 지원문서, 정부/규제기관 페이지 등)를 근거로 쓰고 그 출처 URL도
+  SOURCES 필드로 받는다 - 모델의 사전 지식만으로 지어내지 않도록.
 - Claude API로 본문(영어)을 생성하고, docs/_posts/ 에 Jekyll 포스트
   파일로 저장한다.
 - 구글 Blogger API 인증 정보(GOOGLE_CLIENT_ID 등)가 설정되어 있으면,
   같은 글을 Blogger에도 동시에 자동 발행한다 (설정 안 돼 있으면 조용히 건너뜀).
-  2026-09-20부터: 클러스터 D(트러블슈팅)는 아예 별도 갈래로 분리됐다 -
-  new-maind(BLOGGER_BLOG_ID)로 나가는 "일반 니치" 갈래는 A/B/C/E만 후보로
-  삼고(화/일 휴무일 적용), 같은 구글 계정 소유의 별도 블로그(SECOND_BLOG_URL,
-  simple-tech-fix.blogspot.com)로 나가는 "트러블슈팅 전용" 갈래가 클러스터
-  D만 후보로 삼는다. 2026-09-21부터: 이 트러블슈팅 갈래는 "하루 3번(09/12/
-  17시 KST) 발행해달라"는 요청에 따라 워크플로의 cron이 4개로 늘었다
-  (07시=new-maind 전용, 09/12/17시=simple-tech-fix 전용) - 어느 cron이
-  이번 실행을 켰는지에 따라 RUN_ARMS 환경변수("general"/"tech_fix"/빈
-  문자열=둘 다)가 정해지고, main()이 그에 맞는 갈래만 돈다. 두 갈래는
-  각각 _run_arm()으로 감싸여 있어서, 한쪽이 API 오류로 실패해도
-  (call_claude()의 sys.exit 포함) 다른 쪽이나 이미 성공한 파일의 커밋을
-  막지 않는다. GitHub Pages(docs/_posts)는 이 분기와 무관하게 항상 두
-  갈래 전체를 보관하는 단일 아카이브로 남는다 (resolve_blog_id_by_url(),
-  select_niche_topic()의 include_clusters/exclude_clusters 참고).
+  2026-09-20부터: 클러스터 D(당시엔 트러블슈팅)는 아예 별도 갈래로
+  분리됐다 - new-maind(BLOGGER_BLOG_ID)로 나가는 "일반 니치" 갈래는
+  A/B/C/E만 후보로 삼고(화/일 휴무일 적용), 같은 구글 계정 소유의 별도
+  블로그(SECOND_BLOG_URL, simple-tech-fix.blogspot.com)로 나가는 두 번째
+  갈래가 그 나머지 클러스터만 후보로 삼는다. 2026-09-21부터: 이 두 번째
+  갈래는 "하루 3번(09/12/17시 KST) 발행해달라"는 요청에 따라 워크플로의
+  cron이 4개로 늘었다(07시=new-maind 전용, 09/12/17시=simple-tech-fix
+  전용) - 어느 cron이 이번 실행을 켰는지에 따라 RUN_ARMS 환경변수
+  ("general"/"tech_fix"/빈 문자열=둘 다)가 정해지고, main()이 그에 맞는
+  갈래만 돈다(RUN_ARMS 값 이름 "tech_fix"는 최초 도입 당시의 이름을 그대로
+  코드/워크플로 전반에 유지한 것뿐이고, 현재 이 갈래가 실제로 다루는 니치와는
+  무관하다 - 2026-09-22 피벗 참고). 두 갈래는 각각 _run_arm()으로 감싸여
+  있어서, 한쪽이 API 오류로 실패해도(call_claude()의 sys.exit 포함) 다른
+  쪽이나 이미 성공한 파일의 커밋을 막지 않는다. GitHub Pages(docs/_posts)는
+  이 분기와 무관하게 항상 두 갈래 전체를 보관하는 단일 아카이브로 남는다
+  (resolve_blog_id_by_url(), select_niche_topic()의
+  include_clusters/exclude_clusters 참고).
+- 2026-09-22: simple-tech-fix로 나가는 두 번째 갈래의 니치를 "원격근무 툴
+  트러블슈팅"에서 "미국 개인금융(Personal Finance)" 가이드로 완전히
+  전환했다(사용자가 올린 SEO 리서치 브리프 기준). 클러스터 D(트러블슈팅
+  26개)는 폐기하고, 새 클러스터 F1(Money Basics, 사회초년생 저축/신용점수,
+  가중치 3)·F2(Beginner Wealth, 투자 초보 직장인, 가중치 2)·F3(Freelancer
+  Money, 프리랜서 비상금/세금, 가중치 5) 총 30개로 교체했다(FINANCE_CLUSTERS
+  참고) - 3개 허브의 상대 가중치는 브리프의 주간 발행 배분(3:2:5)을 그대로
+  옮겼다. 포맷은 셋 다 build_finance_prompt() 하나로 통일한다(브리프의
+  "글 한 편 제작 템플릿" - 다이렉트 답변/본문 H2 4-6개/비교표/FAQ 3-5개
+  구조). 개인금융은 YMYL(Your Money Your Life) 분야라 "이건 재무 조언이
+  아니다" 면책 문구가 매 글에 빠짐없이 있어야 하는데, 모델이 매번 정확히
+  쓰길 기대하는 대신 _run_generation()이 FINANCE_TRUST_BLOCK을 프로그램적
+  으로 덧붙인다(날짜·면책 문구가 항상 정확하도록). 대상 독자는 이전 니치와
+  같은 원칙(미국 영어 우선)에 따라 미국 거주자로 고정했다 - 세금·신용점수
+  제도가 국가마다 달라 다른 국가로 넓히려면 별도 분리가 필요하다.
 - 이미지는 Unsplash 일반 스톡사진 대신, Claude가 SOURCES로 알려준 공식
   페이지(가격/지원문서 등, 로그인 불필요)를 Playwright로 직접 캡처해서
   쓴다 - "직접 제작/캡처/AI생성/명확한 라이선스만" 원칙상 소프트웨어
@@ -49,7 +71,8 @@
   기존처럼 Unsplash나 실제 제품 이미지를 그대로 쓴다.
 - 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후 new-maind는 매일 발행 대신
   화/일을 휴무일로 두고 주 5회만 발행한다 (REST_WEEKDAYS) - simple-tech-fix
-  전용 트러블슈팅 갈래는 이 휴무일 적용 대상이 아니다(매일 발행 요청).
+  전용 갈래(FINANCE_CLUSTERS)는 이 휴무일 적용 대상이 아니다(하루 3번 발행
+  요청).
 """
 
 import datetime
@@ -110,12 +133,37 @@ BLOGGER_BLOG_ID = os.environ.get("BLOGGER_BLOG_ID", "")
 UNSPLASH_ACCESS_KEY = os.environ.get("UNSPLASH_ACCESS_KEY", "")
 UNSPLASH_APP_NAME = os.environ.get("UNSPLASH_APP_NAME", "auto-blog-autopilot")
 
-# 클러스터별 발행 우선순위 가중치. "단순 How-to보다 비교/대안형 콘텐츠를
-# 우선한다"는 전략에 따라: D(트러블슈팅, 경쟁도 낮아 최우선) > C/E(비교·대안,
-# 광고 친화적이고 AI Overview 노출이 적은 구매의도 검색) > B(생산성/자동화,
-# 트렌드 일부 포함) > A(순수 실사용 가이드, AI Overview에 CTR이 가장 많이
-# 깎이는 단순 정보성 How-to라 가장 낮은 가중치).
-NICHE_CLUSTER_WEIGHT = {"A": 1, "B": 2, "C": 4, "D": 5, "E": 4}
+# 클러스터별 발행 우선순위 가중치. new-maind(A/B/C/E) 쪽은 "단순 How-to보다
+# 비교/대안형 콘텐츠를 우선한다"는 전략에 따라: C/E(비교·대안, 광고
+# 친화적이고 AI Overview 노출이 적은 구매의도 검색) > B(생산성/자동화, 트렌드
+# 일부 포함) > A(순수 실사용 가이드, AI Overview에 CTR이 가장 많이 깎이는
+# 단순 정보성 How-to라 가장 낮은 가중치). simple-tech-fix 쪽(F1/F2/F3,
+# 2026-09-22 개인금융 피벗) 가중치는 SEO 브리프의 허브별 주간 발행 배분을
+# 그대로 옮겼다: Money Basics 3 : Beginner Wealth 2 : Freelancer Money 5.
+NICHE_CLUSTER_WEIGHT = {"A": 1, "B": 2, "C": 4, "E": 4, "F1": 3, "F2": 2, "F3": 5}
+
+# simple-tech-fix로 나가는 두 번째 갈래가 후보로 삼는 클러스터. main()의
+# select_niche_topic() 호출(일반 니치는 이걸 exclude, 두 번째 갈래는 이걸
+# include)과 _run_generation()의 FINANCE_TRUST_BLOCK 삽입 여부 판단에 함께
+# 쓴다 - 새 허브를 추가/제거할 때 이 한 곳만 고치면 된다.
+FINANCE_CLUSTERS = ("F1", "F2", "F3")
+
+# 개인금융(YMYL) 글에 항상 붙는 신뢰 신호 문단. 모델이 매번 정확한 날짜와
+# 문구로 면책 문구를 쓰길 기대하는 대신, _run_generation()이 본문 맨 앞
+# (이미지 다음)에 프로그램적으로 삽입한다 - "author bio, update date,
+# country-specific disclaimer, no guaranteed-return claims" 요건 중 날짜·
+# 국가 범위·면책 부분을 여기서 확정적으로 보장하고, 나머지(공식 출처 인용,
+# 확정적 수익 약속 금지)는 build_finance_prompt()가 본문 자체에 요구한다.
+FINANCE_TRUST_BLOCK = (
+    "*Last updated {month_year}. This article is for general education, not "
+    "personalized financial, tax, or legal advice - your own situation and "
+    "the right choice for you can differ from the examples here. Consider "
+    "talking to a licensed financial advisor, tax professional, or attorney "
+    "about your specific circumstances. Figures and rules described are for "
+    "U.S. readers unless noted otherwise, and program details can change - "
+    "always confirm current terms on the official source linked in this "
+    "post before acting.*\n\n"
+)
 
 
 def load_niche_topics() -> list[dict]:
@@ -159,8 +207,9 @@ def select_niche_topic(
 ) -> dict:
     """topics.json 중 하나를 클러스터 가중치(NICHE_CLUSTER_WEIGHT) 기반
     가중 무작위로 고른다. include_clusters/exclude_clusters로 후보 풀을
-    특정 클러스터로 좁히거나(예: D 전용 일일 발행) 뺄 수 있다(예: 일반
-    니치 발행에서는 D를 뺀다 - D는 main()이 매일 별도로 처리하므로).
+    특정 클러스터로 좁히거나(예: FINANCE_CLUSTERS 전용 발행) 뺄 수 있다
+    (예: 일반 니치 발행에서는 FINANCE_CLUSTERS를 뺀다 - 그쪽은 main()이
+    별도로 처리하므로).
     최근에 쓴 주제(used_topic_ids.json, 클러스터 구분 없이 공유)는 먼저
     제외하고 고르되, 이번 후보 풀이 거의 다 써서 하나도 안 남으면 그
     풀에서 다시 고른다(콘텐츠는 결국 새로고침할 수 있으니 영구 배제는
@@ -168,11 +217,11 @@ def select_niche_topic(
     save_used_topic_id()로 기록한다(여기서는 기록하지 않는다 - 실패한
     회차까지 "사용됨"으로 남으면 안 되므로).
 
-    FORCE_NICHE_CLUSTER 환경변수(A~E)가 설정돼 있고 그 클러스터가 이번
-    호출의 후보 풀(include/exclude 적용 후) 안에 있으면 그 클러스터로만
-    후보를 더 좁힌다 - workflow_dispatch 수동 검증용. 풀에 없으면(예: 일반
-    니치 호출에서 D를 강제 지정) 무시하고 넘어간다. 평소 스케줄 실행에는
-    영향 없다."""
+    FORCE_NICHE_CLUSTER 환경변수(A/B/C/E/F1/F2/F3)가 설정돼 있고 그
+    클러스터가 이번 호출의 후보 풀(include/exclude 적용 후) 안에 있으면 그
+    클러스터로만 후보를 더 좁힌다 - workflow_dispatch 수동 검증용. 풀에
+    없으면(예: 일반 니치 호출에서 F1을 강제 지정) 무시하고 넘어간다. 평소
+    스케줄 실행에는 영향 없다."""
     topics = load_niche_topics()
     used_ids = set(load_used_topic_ids())
 
@@ -365,17 +414,22 @@ def call_claude(prompt: str, enable_web_search: bool = False) -> str:
         max_tokens=6000 if enable_web_search else 4096,
         output_config={"effort": "medium"},
         system=(
-            "You are the writer for an automated English-language blog about "
-            "AI-powered productivity tools, software alternatives/comparisons, "
-            "and remote-work tool troubleshooting, aimed at a US audience. "
-            "Write in natural, native-sounding American English - never a stiff "
-            "or translated tone. Base every claim on verified facts (use web "
-            "search for anything time-sensitive like pricing, plans, or feature "
-            "availability); never invent numbers, features, or pricing. Never "
-            "copy or closely paraphrase another blog, article, or review site - "
-            "synthesize your own original explanation from what you find. Do "
-            "not pad the post with filler just to hit a word count; be concise "
-            "and useful."
+            "You write for two automated English-language blogs aimed at a US "
+            "audience: one about AI-powered productivity tools and software "
+            "alternatives/comparisons, the other a personal-finance blog for "
+            "entry-level workers, beginner investors, and freelancers "
+            "(savings, credit, investing basics, and freelancer money/tax "
+            "management). Write in natural, native-sounding American English - "
+            "never a stiff or translated tone. Base every claim on verified "
+            "facts (use web search for anything time-sensitive like pricing, "
+            "plans, feature availability, interest rates, fees, or tax "
+            "figures); never invent numbers, features, pricing, rates, or fees. "
+            "On finance topics specifically: never promise or imply guaranteed "
+            "returns or guaranteed outcomes, and treat every number as a claim "
+            "that needs a real source. Never copy or closely paraphrase "
+            "another blog, article, or review site - synthesize your own "
+            "original explanation from what you find. Do not pad the post "
+            "with filler just to hit a word count; be concise and useful."
         ),
         messages=[{"role": "user", "content": prompt}],
     )
@@ -556,26 +610,34 @@ Tone: natural, native American English, plain and helpful. No hype, no unverifie
 """
 
 
-def build_troubleshoot_prompt(topic: dict, recent_titles: list[str]) -> str:
-    """Troubleshoot 포맷(클러스터 D): 원격근무 툴 오류 해결. 경쟁도가 낮아
-    NICHE_CLUSTER_WEIGHT에서 가장 우선순위를 높게 둔 축이다."""
-    return f"""You are writing a troubleshooting guide for an English-language blog about remote-work software problems, for a US audience.
+def build_finance_prompt(topic: dict, recent_titles: list[str]) -> str:
+    """Finance 포맷(클러스터 F1/F2/F3, simple-tech-fix 전용): 미국 개인금융
+    가이드. 2026-09-22 니치 피벗(트러블슈팅 -> 개인금융) 이후 이 갈래의
+    유일한 포맷이다 - 3개 허브(Money Basics/Beginner Wealth/Freelancer
+    Money)를 하나의 구조로 통일해서 쓴다(사용자가 올린 SEO 브리프의 "글 한
+    편 제작 템플릿" 기준: 다이렉트 답변 -> 본문 -> 비교표 -> FAQ). YMYL
+    분야라 "이건 재무 조언이 아니다" 면책 문구가 매번 필요한데, 모델이
+    빠짐없이 쓰길 기대하는 대신 _run_generation()이 FINANCE_TRUST_BLOCK을
+    프로그램적으로 덧붙인다 - 그래서 여기서는 본문 자체의 신뢰 신호(공식
+    출처, 숫자 지어내지 않기, 확정적 수익 약속 금지)만 요구한다."""
+    return f"""You are writing a personal-finance guide for a US audience, for an English-language blog focused on practical money management for entry-level workers, beginner investors, and freelancers.
 
+Content hub for this post: {topic['cluster_name']}
 Target keyword/topic: "{topic['keyword']}"
 {_niche_avoid_block(recent_titles)}
-Use web search to confirm the CURRENT fix against the tool's own official support/help-center pages - UI labels and settings menus change often, and a stale fix is worse than none.
+This is a YMYL (Your Money Your Life) topic - accuracy and caution matter more than usual here. Use web search to confirm any CURRENT number you cite (interest rates, fees, tax figures, contribution limits, account minimums, credit score ranges) directly from an official source: a government/regulator site (irs.gov, consumerfinance.gov, sec.gov, investor.gov, usa.gov) or the specific bank/broker/software vendor's own official page. Never invent a rate, fee, limit, or feature. Never promise or imply guaranteed returns, a guaranteed savings amount, or a guaranteed outcome - describe realistic ranges, typical cases, and trade-offs instead.
 
 Structure (in this order):
-1. A direct answer: the single most common fix, in the first 1-2 sentences. People searching an error want the fix fast.
-2. "Why This Happens" - the likely causes, briefly.
-3. Step-by-step fixes, ordered from the quickest/most common fix to less common ones.
-4. "How to Prevent It Next Time" - a short prevention section.
+1. A direct answer to the reader's question in the first 2-3 sentences - state the bottom-line takeaway before explaining it (this doubles as a featured-snippet-ready "quick answer").
+2. The main body: 4-6 ## subheadings covering, as relevant to this specific topic, cost/fees, pros and cons, who this is (and isn't) a good fit for, concrete steps to take, and alternatives worth considering.
+3. If this topic involves comparing options (accounts, apps, tools, or approaches), include one Markdown comparison table (fees, minimums, key features, best-for). Skip the table if there's genuinely nothing to compare.
+4. A short FAQ (3-5 questions), phrased the way someone would actually type them into a search box.
 
-You must cite the tool's own OFFICIAL support/help-center page in SOURCES (e.g. support.zoom.us, support.google.com) - not a random forum or third-party tech blog.
+Length: about 1200-1800 words. Be concrete and specific rather than generic - a reader should walk away with an actual number, step, or decision, not vague encouragement.
 
-Length: about 700-1000 words. Troubleshooting readers want the fix fast - don't pad this out.
+Tone: natural, native American English, plain and direct - like a financially literate friend explaining this clearly, not a stiff disclaimer-laden corporate page. No hype, no guaranteed-return language, no fear-mongering.
 
-Tone: natural, native American English, plain and direct.
+You must cite official sources in SOURCES: government/regulatory sites or the specific institution's/vendor's own official page - never a third-party review, roundup, or "best of" site.
 
 {OUTPUT_FORMAT_BLOCK}
 """
@@ -610,8 +672,8 @@ Tone: natural, native American English, confident but fair to both sides - no hy
 NICHE_FORMAT_PROMPT_BUILDERS = {
     "how_to": build_how_to_prompt,
     "alternative": build_alternative_prompt,
-    "troubleshoot": build_troubleshoot_prompt,
     "comparison": build_comparison_prompt,
+    "finance_guide": build_finance_prompt,
 }
 
 
@@ -900,8 +962,8 @@ def markdown_to_html(text: str) -> str:
 
 def post_to_blogger(title: str, body_markdown: str, blog_id: str | None = None) -> None:
     """설정돼 있으면 같은 글을 구글 Blogger에도 발행한다. blog_id를 안 주면
-    기본 블로그(BLOGGER_BLOG_ID, new-maind)에 발행한다 - 클러스터 D
-    (트러블슈팅) 글을 두 번째 블로그(SECOND_BLOG_URL)에 발행할 때는
+    기본 블로그(BLOGGER_BLOG_ID, new-maind)에 발행한다 - FINANCE_CLUSTERS
+    글을 두 번째 블로그(SECOND_BLOG_URL)에 발행할 때는
     resolve_blog_id_by_url()로 알아낸 id를 넘긴다 (main() 참고). 실패해도
     GitHub Pages 발행 자체를 막지 않도록, 여기서 나는 오류는 절대 sys.exit
     하지 않고 그냥 건너뛴다."""
@@ -938,11 +1000,15 @@ def post_to_blogger(title: str, body_markdown: str, blog_id: str | None = None) 
         print(f"Blogger 발행 실패, 이번 회차는 건너뜁니다: {e}")
 
 
-# 클러스터 D(Remote-Work Tool Troubleshooting) 글은 new-maind가 아니라 같은
-# 구글 계정 소유의 별도 블로그로 보낸다 - 블로그 이름·니치가 잘 맞고, 같은
-# 글을 두 블로그에 중복 발행하면 애드센스가 "중복 콘텐츠"로 볼 위험도 피할
-# 수 있다. GitHub Pages(docs/_posts)는 이 분기와 무관하게 항상 전체
-# 클러스터를 그대로 보관하는 단일 아카이브로 남는다.
+# FINANCE_CLUSTERS(F1/F2/F3) 글은 new-maind가 아니라 같은 구글 계정 소유의
+# 별도 블로그로 보낸다 - 같은 글을 두 블로그에 중복 발행하면 애드센스가
+# "중복 콘텐츠"로 볼 위험도 피할 수 있다. 2026-09-20 도입 당시엔 클러스터
+# D(Remote-Work Tool Troubleshooting)가 이 자리였고, 2026-09-22부터는 미국
+# 개인금융(Money Basics/Beginner Wealth/Freelancer Money) 니치로 완전히
+# 바뀌었다 - 블로그 URL/도메인 이름("simple-tech-fix")은 최초 취지를 그대로
+# 남겨둔 것뿐이라 지금 다루는 내용과는 무관하다. GitHub Pages(docs/_posts)는
+# 이 분기와 무관하게 항상 전체 클러스터를 그대로 보관하는 단일 아카이브로
+# 남는다.
 SECOND_BLOG_URL = "https://simple-tech-fix.blogspot.com/"
 
 
@@ -1059,13 +1125,17 @@ This blog currently carries no affiliate or referral links. If that changes in t
 
 ## 4. Content and How It's Made
 
-This blog is run by a single independent operator, and posts are written with the help of AI automation tools, but the operator decides what topics to cover and takes final responsibility for what's published. Every fix is checked against the tool's own official support/help-center page before publishing, rather than a forum post or a third-party tech blog.
+This blog is run by a single independent operator, and posts are written with the help of AI automation tools, but the operator decides what topics to cover and takes final responsibility for what's published. Every number cited (rates, fees, tax figures, limits) is checked against an official government/regulator source or the specific institution's own page before publishing, rather than a forum post or a third-party roundup site.
 
-## 5. Contact
+## 5. Not Financial Advice
+
+Nothing on this blog is personalized financial, tax, or legal advice. Content is general education for a US audience; your own circumstances may call for a different choice than the examples described here. Consider talking to a licensed financial advisor, tax professional, or attorney about your specific situation before acting.
+
+## 6. Contact
 
 If you have questions about this privacy policy or how this blog is run, please leave a comment on any post.
 
-## 6. Changes
+## 7. Changes
 
 This policy may change as the service or applicable law changes; updates will be reflected on this page.
 """
@@ -1073,7 +1143,13 @@ This policy may change as the service or applicable law changes; updates will be
 SECOND_BLOG_ABOUT_PAGE_MD_TEMPLATE = """\
 ## What This Blog Covers
 
-This blog covers quick fixes for common problems with the remote-work tools people use every day - Zoom, Google Meet, Google Drive, Slack, Notion, and Google Docs. Each post targets one specific problem (a stuck sync, a muted mic, a missing notification) with a fix you can try right away, ordered from the most common cause to the least.
+This blog covers practical personal finance for three kinds of US readers, across three ongoing series:
+
+- **Money Basics** - savings, budgeting, and credit fundamentals for people early in their careers.
+- **Beginner Wealth** - investing basics and realistic side hustles for people who are new to building wealth on a regular paycheck.
+- **Freelancer Money** - emergency funds, budgeting for irregular income, and taxes for the self-employed.
+
+Each post gives a direct, specific answer first, then walks through the costs, trade-offs, and concrete steps - not vague encouragement.
 
 ## About the Operator
 
@@ -1081,11 +1157,12 @@ This blog is run by a single independent operator, as a focused companion to a b
 
 ## How Content Is Made
 
-- Every fix is checked against the tool's own official support/help-center page before publishing, rather than a random forum post or a third-party tech blog.
-- Screenshots used in posts are captured directly from those official public pages.
-- Posts stay short and specific: the fastest fix first, then less common causes, then how to prevent it next time.
+- Every number cited (interest rates, fees, tax figures, contribution limits, account minimums) is checked against an official source - a government/regulator site (irs.gov, consumerfinance.gov, sec.gov, investor.gov) or the specific bank/broker/software vendor's own official page - before publishing, rather than a third-party review or roundup site.
+- Posts never promise or imply guaranteed returns or guaranteed outcomes; money topics involve real trade-offs and risk that vary by person.
+- Content is US-focused; tax, credit, and investing rules described are for US readers unless a post says otherwise.
+- Posts aim to be concrete and specific rather than padded out to hit a word count.
 
-This blog currently carries no affiliate or referral links. See the [Privacy Policy]({privacy_url}) page for more detail.
+This blog currently carries no affiliate or referral links. Nothing here is personalized financial, tax, or legal advice - see the [Privacy Policy]({privacy_url}) page for more detail.
 
 ## Contact
 
@@ -1292,8 +1369,8 @@ def _run_generation(
     그 블로그로, 안 주면 기본 블로그(BLOGGER_BLOG_ID, new-maind)로 발행한다.
 
     main()이 이 함수를 최대 두 번 부른다 - "일반 니치"(A/B/C/E, 클러스터
-    가중치 기반, new-maind, 화/일 휴무)와 "트러블슈팅 전용 일일"(D,
-    simple-tech-fix, 매일, 휴무 없음). 한쪽이 call_claude() 등에서
+    가중치 기반, new-maind, 화/일 휴무)와 "개인금융 전용"(FINANCE_CLUSTERS,
+    simple-tech-fix, 하루 3번, 휴무 없음). 한쪽이 call_claude() 등에서
     실패(SystemExit 포함)해도 다른 쪽이나 이미 만들어진 파일의 커밋을
     막으면 안 되므로, 이 함수 자체는 예외를 삼키지 않고 그대로 올려보내고
     (그래야 실패 원인이 로그에 그대로 남는다) 호출부(main())가 _run_arm()으로
@@ -1324,15 +1401,26 @@ def _run_generation(
         # 소프트웨어 화면 자리에 무관한 Unsplash 스톡사진을 쓸 수 없어서다).
         # 로그인 필요/타임아웃 등으로 캡처가 하나도 성공하지 못했을 때만
         # Unsplash 사진 1장을 대표 이미지로 대신 쓴다.
+        is_finance = bool(niche_topic and niche_topic["cluster"] in FINANCE_CLUSTERS)
         photos = build_screenshot_photos(sources, slug)
         if not photos:
             print("공식 페이지 캡처가 하나도 성공하지 못해 Unsplash 대표 이미지로 대신합니다.")
-            stock_query = f"{niche_topic['cluster_name']} software" if niche_topic else (keyword or fallback_title)
+            if is_finance:
+                stock_query = f"{keyword or fallback_title} personal finance"
+            elif niche_topic:
+                stock_query = f"{niche_topic['cluster_name']} software"
+            else:
+                stock_query = keyword or fallback_title
             stock = find_stock_photo(stock_query)
             if stock:
                 stock = dict(stock, kind="unsplash")
                 photos = [stock]
         body = distribute_images_into_body(body, photos, block_builder=build_niche_image_block)
+
+        if is_finance:
+            # YMYL 신뢰 신호(최신성·면책 문구)를 모델에 맡기지 않고 항상
+            # 정확하게 붙인다 (FINANCE_TRUST_BLOCK 정의부 참고).
+            body = FINANCE_TRUST_BLOCK.format(month_year=today.strftime("%B %Y")) + body
 
     POSTS_DIR.mkdir(parents=True, exist_ok=True)
     post_path = POSTS_DIR / f"{today.isoformat()}-{slug}.md"
@@ -1371,7 +1459,7 @@ def _run_generation(
 
 
 def _run_arm(label: str, fn) -> bool:
-    """한 갈래(지정 발행/일반 니치/트러블슈팅 전용 일일) 실행을 감싸서, 이
+    """한 갈래(지정 발행/일반 니치/개인금융 전용) 실행을 감싸서, 이
     안에서 나는 어떤 오류(call_claude()의 sys.exit 포함)도 다른 갈래의
     실행이나 이미 성공적으로 만들어진 파일의 커밋을 막지 않게 한다 -
     main()이 이제 한 번 실행에 최대 두 번 글을 생성하므로, 한쪽이 API
@@ -1418,7 +1506,7 @@ def main() -> None:
     results: list[tuple[str, bool]] = []
 
     if manual and run_general:
-        # 제품 지정 발행(manual)은 일반 니치 갈래의 대체재라서, 트러블슈팅
+        # 제품 지정 발행(manual)은 일반 니치 갈래의 대체재라서, 두 번째 블로그
         # 전용(simple-tech-fix) cron 슬롯(09/12/17시)에서는 아예 다루지
         # 않는다 - 안 그러면 같은 제품 글이 하루 세 번 나가버린다.
         def _run_manual():
@@ -1430,12 +1518,12 @@ def main() -> None:
     elif run_general:
         # 일반 니치(A/B/C/E) - 애드센스 "가치가 별로 없는 콘텐츠" 판정 이후
         # 매일 발행 대신 화/일을 휴무일로 두고 주 5회만 발행한다
-        # (REST_WEEKDAYS). 트러블슈팅(D)은 simple-tech-fix에 따로
-        # 발행하므로(아래) 이 후보 풀에서는 제외한다.
+        # (REST_WEEKDAYS). FINANCE_CLUSTERS(F1/F2/F3)는 simple-tech-fix에
+        # 따로 발행하므로(아래) 이 후보 풀에서는 제외한다.
         if forced_cluster or kst_now.weekday() not in REST_WEEKDAYS:
             def _run_general():
                 recent_titles = get_recent_titles()
-                general_topic = select_niche_topic(exclude_clusters=("D",))
+                general_topic = select_niche_topic(exclude_clusters=FINANCE_CLUSTERS)
                 prompt_builder = NICHE_FORMAT_PROMPT_BUILDERS[general_topic["format"]]
                 prompt = prompt_builder(general_topic, recent_titles)
                 _run_generation(prompt, general_topic["keyword"], niche_topic=general_topic)
@@ -1449,19 +1537,23 @@ def main() -> None:
             )
 
     if run_tech_fix:
-        # 트러블슈팅(D) -> simple-tech-fix는 하루 3번(09/12/17시 KST)
-        # 발행해달라는 요청에 따라 휴무일 없이 그때마다 새 글 하나씩 낸다.
-        # 블로그 ID를 먼저 조회해서, 실패하면(권한 없음 등) Claude 호출
-        # 자체를 하지 않고 건너뛴다 - 어차피 발행 못 할 글에 API 비용을
-        # 쓸 필요가 없다.
+        # FINANCE_CLUSTERS(F1/F2/F3, 미국 개인금융) -> simple-tech-fix는
+        # 하루 3번(09/12/17시 KST) 발행해달라는 요청에 따라 휴무일 없이
+        # 그때마다 새 글 하나씩 낸다("tech_fix"라는 갈래 이름 자체는 이
+        # 슬롯을 처음 도입했을 때(당시엔 트러블슈팅)의 이름을 그대로 쓰는
+        # 것뿐이다 - RUN_ARMS 값이라 워크플로 cron 분기와 맞물려 있어서
+        # 이름만 따로 바꾸지 않았다). 블로그 ID를 먼저 조회해서, 실패하면
+        # (권한 없음 등) Claude 호출 자체를 하지 않고 건너뛴다 - 어차피
+        # 발행 못 할 글에 API 비용을 쓸 필요가 없다.
         def _run_daily_tech_fix():
             second_blog_id = resolve_blog_id_by_url(SECOND_BLOG_URL)
             if not second_blog_id:
-                sys.exit(f"{SECOND_BLOG_URL} 블로그 ID를 찾지 못해 이번 트러블슈팅 글 발행을 건너뜁니다.")
+                sys.exit(f"{SECOND_BLOG_URL} 블로그 ID를 찾지 못해 이번 글 발행을 건너뜁니다.")
             recent_titles = get_recent_titles()
-            d_topic = select_niche_topic(include_clusters=("D",))
-            prompt = build_troubleshoot_prompt(d_topic, recent_titles)
-            _run_generation(prompt, d_topic["keyword"], niche_topic=d_topic, blog_id=second_blog_id)
+            finance_topic = select_niche_topic(include_clusters=FINANCE_CLUSTERS)
+            prompt_builder = NICHE_FORMAT_PROMPT_BUILDERS[finance_topic["format"]]
+            prompt = prompt_builder(finance_topic, recent_titles)
+            _run_generation(prompt, finance_topic["keyword"], niche_topic=finance_topic, blog_id=second_blog_id)
 
         results.append(("daily(simple-tech-fix)", _run_arm("daily(simple-tech-fix)", _run_daily_tech_fix)))
 
