@@ -25,55 +25,52 @@
 
 1. GitHub Actions가 하루 4번(KST 오전 7시/9시/낮 12시/오후 5시) 실행되고,
    어느 시간에 켰는지에 따라 한 번에 한 갈래만 돕니다 - "일반 니치"(A/B/C/E,
-   new-maind, 오전 7시)와 "개인금융 전용"(F1/F2/F3, simple-tech-fix, 9시/
+   new-maind, 오전 7시)와 "AI/테크 논평 전용"(T1/T2, simple-tech-fix, 9시/
    12시/17시 - 하루 3번 발행해달라는 요청으로 이렇게 나눴습니다). 일반
    니치는 화요일/일요일이 `REST_WEEKDAYS`로 지정된 휴무일이라 지정 발행
    (아래 4번)이 없는 한 건너뛰지만(매일 발행 대신 주 5회로 품질에 집중),
-   개인금융 전용 갈래는 휴무일 없이 매번 돕니다. 어느 cron이 실행을
+   AI/테크 논평 전용 갈래는 휴무일 없이 매번 돕니다. 어느 cron이 실행을
    켰는지로 `RUN_ARMS` 환경변수가 자동으로 정해지고(워크플로 파일 참고),
    두 갈래는 서로 독립적이라 한쪽이 API 오류로 실패해도 다른 쪽에는 영향이
    없습니다 (자세한 내용은 "5-1. 클러스터별로 다른 Blogger 블로그에
    발행하기" 참고).
 2. `data/topics.json`에 니치별 키워드 풀이 고정으로 들어있습니다: new-maind용
-   A/B/C/E(각 6개, 총 24개) + simple-tech-fix용 F1/F2/F3(2026-09-22부터
-   미국 개인금융 니치, 총 30개). 일반 니치 갈래는 A/B/C/E에서, 개인금융
-   전용 갈래는 F1/F2/F3에서만 클러스터 가중치 기반 가중 무작위로 고릅니다:
+   A/B/C/E(각 6개, 총 24개) + simple-tech-fix용 T1/T2(2026-09-26부터
+   AI/테크 논평 니치, 총 20개). 일반 니치 갈래는 A/B/C/E에서, AI/테크
+   논평 전용 갈래는 T1/T2에서만 클러스터 가중치 기반 가중 무작위로 고릅니다:
    - **A. AI Writing & Content Tools** — ChatGPT/Claude 실사용 가이드 (How-to 포맷)
    - **B. AI Productivity & Automation** — 일정관리·자동화 가이드 (How-to 포맷)
    - **C. Free/Budget Software Alternatives** — Canva/Notion/Zoom/Photoshop/
      Grammarly/Slack 무료 대안 (Alternative 포맷)
    - **E. Productivity Software Comparisons** — Notion vs Obsidian 등 정면 비교
      (Comparison 포맷, 광고 친화적이라 우선 발행)
-   - **F1. Money Basics** — 사회초년생 저축/예산/신용점수 (Finance Guide 포맷,
-     가중치 3)
-   - **F2. Beginner Wealth** — 투자 초보 직장인 투자 입문/현실적 부업
-     (Finance Guide 포맷, 가중치 2)
-   - **F3. Freelancer Money** — 프리랜서 비상금/불규칙 수입 예산/세금
-     (Finance Guide 포맷, 가중치 5, 발행 비중이 가장 큼)
+   - **T1. AI Tool Verdicts** — 개별/맞대결 AI 툴에 대한 주관적 평가
+     (AI Commentary 포맷, 가중치 3, 발행 비중이 더 큼)
+   - **T2. AI & Tech Trend Watch** — AI/테크 업계 트렌드에 대한 논평
+     (AI Commentary 포맷, 가중치 2)
 
    `NICHE_CLUSTER_WEIGHT`는 new-maind 쪽은 단순 How-to(A/B)보다 비교/대안형
    (C/E)을 더 자주 고르도록(Google AI Overviews가 단순 정보성 How-to 검색의
    클릭률을 크게 깎아먹는 반면 비교·대안·구매의도 검색은 상대적으로 안전
-   하다는 신호에 따른 전략), simple-tech-fix 쪽은 사용자가 제공한 SEO
-   브리프의 허브별 주간 발행 배분(Money Basics 3 : Beginner Wealth 2 :
-   Freelancer Money 5)을 그대로 옮겨 F3 > F1 > F2 순으로 고르도록 되어
-   있습니다. 최근 사용한 주제(`data/used_topic_ids.json`)는 먼저 제외해서,
-   풀을 거의 다 돌기 전까지는 같은 주제가 반복되지 않습니다.
+   하다는 신호에 따른 전략), simple-tech-fix 쪽은 구매의도·광고 친화도가
+   더 높다고 본 개별/맞대결 툴 평가(T1)를 업계 트렌드 논평(T2)보다 더 자주
+   고르도록 되어 있습니다. 최근 사용한 주제(`data/used_topic_ids.json`)는
+   먼저 제외해서, 풀을 거의 다 돌기 전까지는 같은 주제가 반복되지 않습니다.
 3. 포맷마다 프롬프트 구조가 다릅니다 (`NICHE_FORMAT_PROMPT_BUILDERS`의 4개 함수):
    - **How-to**: 직접 답변 → 준비물 → 단계별 설명 → FAQ → 요약
    - **Alternative**: 직접 답변 → 선정 기준 → 목록형 비교 → 표 → FAQ
    - **Comparison**: 직접 답변(결론 요약) → 비교표 → 항목별 분석 → 추천 대상 → FAQ
-   - **Finance Guide** (F1/F2/F3 전용): 직접 답변("퀵 앤서") → 본문 H2 4~6개
-     (비용/장단점/적합 대상/실행 단계/대안) → (비교 대상이 있으면) 비교표 →
-     FAQ 3~5개. 개인금융은 YMYL(Your Money Your Life) 분야라, 금리·수수료·
-     세금 수치는 반드시 `web_search`로 공식 출처(정부/규제기관 사이트 또는
-     해당 기관/서비스의 공식 페이지)에서 확인하게 하고 확정적 수익 약속은
-     금지합니다. "최신 업데이트 날짜 + 이건 재무 조언이 아니다" 면책 문구는
-     모델에 맡기지 않고 `_run_generation()`이 `FINANCE_TRUST_BLOCK`으로
-     본문 맨 앞에 프로그램적으로 붙입니다(날짜·문구가 항상 정확하도록).
+   - **AI Commentary** (T1/T2 전용): 필자의 결론(퀵 앤서)을 먼저 던지고 →
+     "What's Actually Going On"(검증된 사실) → "My Take"(주관적 판단·근거를
+     명시적으로 밝히는 섹션) → 반대 논거에 대한 공정한 언급 → "Bottom Line"
+     → FAQ 순서로 씁니다. new-maind의 중립적인 How-to/대안/비교 가이드와
+     겹치지 않도록 의도적으로 "결론을 분명히 내리는 논평" 포맷으로
+     차별화했습니다. 가격·기능·검색 순위 등 사실은 여전히 `web_search`로
+     검증하게 하고 지어내지 못하게 하지만, 그 사실을 어떻게 해석하느냐는
+     필자(모델) 관점을 분명히 드러내라고 명시적으로 요구합니다.
 
    전부 Claude의 `web_search` 도구를 켜서 실제 검색 결과(가격 페이지, 공식
-   지원문서, 정부/규제기관 페이지 등)를 근거로 쓰게 하고, 그 출처 URL을
+   지원문서, 업계 리포트 등)를 근거로 쓰게 하고, 그 출처 URL을
    `SOURCES` 필드로 받습니다 (본문에 인용될 뿐 아니라 아래 4번의 스크린샷
    캡처 대상으로도 쓰입니다). 특정 제품에 실제 제휴 링크를 달아 발행하고
    싶은 날짜가 있으면(현재는 이 니치와 맞는 제품이 없어 쓰이지 않지만 기능은
@@ -90,7 +87,7 @@
    삽입" 참고).
 5. 자동으로 커밋·푸시하면, GitHub Pages가 자동으로 사이트를 다시 빌드해서
    글이 공개됩니다. 구글 Blogger 인증 정보가 설정돼 있으면 같은 글을
-   Blogger에도 동시 발행합니다 — F1/F2/F3(개인금융) 글은 new-maind가
+   Blogger에도 동시 발행합니다 — T1/T2(AI/테크 논평) 글은 new-maind가
    아니라 같은 구글 계정 소유의 별도 블로그(simple-tech-fix.blogspot.com)로,
    나머지 클러스터는 new-maind로 갑니다 (아래 "5-1. 클러스터별로 다른
    Blogger 블로그에 발행하기" 참고). GitHub Pages는 이 분기와 무관하게
@@ -198,48 +195,49 @@ Blogger API를 쓰기 때문에 확실하게 자동화되지만, **설정 과정
 하나라도 비어 있으면 스크립트가 자동으로 Blogger 발행만 건너뛰고 GitHub Pages
 발행은 평소대로 계속됩니다 (즉, 이 설정을 안 해도 기존 기능은 전혀 영향 없습니다).
 
-#### 5-1. 클러스터별로 다른 Blogger 블로그·다른 빈도로 발행하기 (현재: F1/F2/F3 개인금융, 하루 3번)
+#### 5-1. 클러스터별로 다른 Blogger 블로그·다른 빈도로 발행하기 (현재: T1/T2 AI/테크 논평, 하루 3번)
 
 2026-09-20부터, simple-tech-fix로 나가는 두 번째 블로그 갈래는 아예 완전히
 별도 갈래로 분리됐습니다. 워크플로의 cron이 4개로 늘었고(`.github/workflows/
 auto-blog-daily-post.yml`), 어느 cron이 실행을 켰는지에 따라 `RUN_ARMS`
 환경변수("general"/"tech_fix"/빈 문자열=둘 다)가 자동으로 정해져서, `main()`이
-그에 맞는 갈래만 돕니다. **2026-09-22부터, 이 두 번째 갈래의 니치를 "원격근무
-툴 트러블슈팅"에서 "미국 개인금융(Personal Finance)"으로 완전히 전환했습니다**
-(사용자가 제공한 SEO 리서치 브리프 기준) - `RUN_ARMS` 값 이름 자체는
-`"tech_fix"`를 그대로 쓰고 있지만(도입 당시 이름을 코드·워크플로 전반에서
-바꾸지 않았을 뿐), 실제로 다루는 내용과는 이제 무관합니다:
+그에 맞는 갈래만 돕니다. 이 두 번째 갈래의 니치는 2026-09-22에 "원격근무 툴
+트러블슈팅"에서 "미국 개인금융"으로, **2026-09-26부터는 "금융은 빼고 테크/AI로
+바꿔달라"는 요청에 따라 "AI/테크 논평(AI Tool Verdicts + AI & Tech Trend
+Watch)"으로 다시 전환했습니다** - `RUN_ARMS` 값 이름 자체는 `"tech_fix"`를
+그대로 쓰고 있지만(도입 당시 이름을 코드·워크플로 전반에서 바꾸지 않았을
+뿐), 실제로 다루는 내용과는 이제 무관합니다:
 
 - **일반 니치 갈래** (`RUN_ARMS=general`, A/B/C/E,
-  `select_niche_topic(exclude_clusters=FINANCE_CLUSTERS)`) — KST 오전 7시
-  cron 하나로 돌고, 기존처럼 `BLOGGER_BLOG_ID`(new-maind)로 발행되며 화/일
-  휴무일(`REST_WEEKDAYS`)이 그대로 적용됩니다.
-- **개인금융 전용 갈래** (`RUN_ARMS=tech_fix`, F1/F2/F3만,
-  `select_niche_topic(include_clusters=FINANCE_CLUSTERS)`) — KST 오전
+  `select_niche_topic(exclude_clusters=SECOND_BLOG_CLUSTERS)`) — KST 오전
+  7시 cron 하나로 돌고, 기존처럼 `BLOGGER_BLOG_ID`(new-maind)로 발행되며
+  화/일 휴무일(`REST_WEEKDAYS`)이 그대로 적용됩니다.
+- **AI/테크 논평 전용 갈래** (`RUN_ARMS=tech_fix`, T1/T2만,
+  `select_niche_topic(include_clusters=SECOND_BLOG_CLUSTERS)`) — KST 오전
   9시/낮 12시/오후 5시, 하루 3개의 별도 cron으로 돌고, 같은 구글 계정
   소유의 다른 블로그(`SECOND_BLOG_URL` 상수, 현재
   `https://simple-tech-fix.blogspot.com/`)로 **휴무일 없이 매번 새 글
-  하나씩** 발행됩니다. 3개 콘텐츠 허브(`NICHE_CLUSTER_WEIGHT`의 F1/F2/F3
-  가중치, SEO 브리프의 허브별 주간 발행 배분을 그대로 옮김):
-  - **F1. Money Basics** (가중치 3) — 사회초년생 대상 저축/예산/신용점수
-  - **F2. Beginner Wealth** (가중치 2) — 투자 초보 직장인 대상 투자
-    입문/현실적 부업
-  - **F3. Freelancer Money** (가중치 5, 가장 자주 선택) — 프리랜서 대상
-    비상금/불규칙 수입 예산/세금
+  하나씩** 발행됩니다. new-maind(A/B/C/E)가 중립적인 How-to/대안/비교
+  가이드 위주인 것과 겹치지 않도록, 이 갈래는 의도적으로 "결론을 분명히
+  내리는 주관적 논평" 포맷으로 차별화했습니다. 2개 콘텐츠 시리즈
+  (`NICHE_CLUSTER_WEIGHT`의 T1/T2 가중치):
+  - **T1. AI Tool Verdicts** (가중치 3, 가장 자주 선택) — 개별/맞대결 AI
+    툴에 대한 주관적 평가(무엇이 진짜 돈값을 하고 무엇이 과대평가됐는지)
+  - **T2. AI & Tech Trend Watch** (가중치 2) — AI/테크 업계 트렌드에 대한
+    논평(마케팅 문구를 걷어낸 실제 상황 진단)
 
-  총 30개 주제(`data/topics.json`의 F1/F2/F3, 브리프의 30일 콘텐츠
-  캘린더를 그대로 옮김)가 하루 3개씩 나가므로 대략 열흘이면 한 바퀴 돕니다.
-  반복 주기를 늘리려면 `topics.json`에 F1/F2/F3 항목을 더 추가하세요.
-  글 포맷은 셋 다 `build_finance_prompt()` 하나로 통일되어 있습니다(직접
-  답변 → 본문 H2 4~6개 → 필요시 비교표 → FAQ). 개인금융은 YMYL 분야라
-  금리·수수료·세금 수치는 반드시 공식 출처(정부/규제기관 또는 해당
-  기관/서비스 자체 페이지)로 `web_search` 확인하게 하고, 확정적 수익
-  약속은 프롬프트에서 금지하고 있습니다. "최신 업데이트 날짜 + 이건 재무
-  조언이 아니다" 면책 문구는 모델이 매번 빠짐없이 쓰길 기대하는 대신,
-  `_run_generation()`이 `FINANCE_TRUST_BLOCK`을 본문 맨 앞에 프로그램적으로
-  붙여서 항상 정확하게 보장합니다. 대상 독자는 미국으로 고정했습니다 -
-  세금·신용점수 제도가 국가마다 달라서, 다른 국가로 넓히려면 별도 클러스터
-  분리가 필요합니다.
+  총 20개 주제(`data/topics.json`의 T1/T2)가 하루 3개씩 나가므로 대략
+  일주일이면 한 바퀴 돕니다. 반복 주기를 늘리려면 `topics.json`에 T1/T2
+  항목을 더 추가하세요. 글 포맷은 둘 다 `build_ai_commentary_prompt()`
+  하나로 통일되어 있습니다: 필자의 결론(퀵 앤서) → "What's Actually Going
+  On"(검증된 사실) → "My Take"(주관적 판단을 명시적으로 밝히는 섹션) →
+  반대 논거에 대한 공정한 언급 → "Bottom Line" → FAQ. 가격·기능·검색
+  순위 등 사실은 여전히 `web_search`로 검증하게 하고 지어내지 못하게 하되,
+  그 사실을 어떻게 해석하느냐는 필자 관점을 분명히 드러내라고 프롬프트에서
+  명시적으로 요구합니다(`AI_TREND_CONTEXT_BLOCK`으로 2026년 AI/테크
+  트렌드에 대한 배경지식도 함께 심어줍니다 - ChatGPT/Gemini/Claude 검색
+  순위, AI Overviews가 정보성 검색 CTR을 깎는 현상 등, 실제 리서치로
+  확인한 내용).
 
 `workflow_dispatch`로 수동 실행할 때는 `run_arms` 입력으로 갈래를 지정할
 수 있습니다(비워두면 기존처럼 둘 다 실행). 두 갈래는 각각 `_run_arm()`으로
@@ -250,30 +248,31 @@ auto-blog-daily-post.yml`), 어느 cron이 실행을 켰는지에 따라 `RUN_AR
 글을 보관하는 단일 아카이브로 남습니다.
 
 **비용 참고**: 화/일이 아닌 날은 하루에 Claude API 호출이 총 4번(일반
-니치 1 + 개인금융 3)까지 나갑니다. 화/일에도 개인금융 갈래 3번은 그대로
-나갑니다.
+니치 1 + AI/테크 논평 3)까지 나갑니다. 화/일에도 AI/테크 논평 갈래 3번은
+그대로 나갑니다.
 
 **별도 GitHub Secrets 등록이 필요 없습니다** — 같은 구글 계정 소유 블로그라면
 위 4개 시크릿(특히 `GOOGLE_REFRESH_TOKEN`)이 이미 접근 권한을 갖고 있어서,
 `resolve_blog_id_by_url()`이 Blogger API로 URL만 보고 블로그 ID를 매번
 자동으로 조회합니다. 이 블로그가 없거나 접근 권한이 없으면(다른 계정 소유
-등) 그 회차의 개인금융 글 자체를 생성하지 않고 건너뜁니다(API 비용 절약 -
-resolve 실패를 먼저 확인한 뒤에 Claude를 호출하므로), 로그에 이유가 남습니다.
+등) 그 회차의 AI/테크 논평 글 자체를 생성하지 않고 건너뜁니다(API 비용
+절약 - resolve 실패를 먼저 확인한 뒤에 Claude를 호출하므로), 로그에 이유가
+남습니다.
 
 이 블로그에도 new-maind와 똑같이 개인정보처리방침·소개 페이지가 자동으로
-동기화됩니다(`sync_second_blogger_static_pages()`) - 개인금융 갈래를
+동기화됩니다(`sync_second_blogger_static_pages()`) - AI/테크 논평 갈래를
 실행하지 않는 회차(예: 오전 7시 일반 니치 슬롯)에도 매번 블로그 ID를
 조회해서 페이지 내용을 최신 상태로 맞춥니다. 내용은
 `SECOND_BLOG_PRIVACY_PAGE_MD`/`SECOND_BLOG_ABOUT_PAGE_MD_TEMPLATE` 상수에서
-이 블로그(3개 콘텐츠 허브 소개, 신뢰 신호, "재무 조언 아님" 고지 포함)에
-맞게 따로 관리합니다.
+이 블로그(2개 콘텐츠 시리즈 소개, 이 블로그는 의견/논평이라는 점)에 맞게
+따로 관리합니다.
 
 다른 클러스터도 이런 식으로 별도 블로그·별도 빈도로 분리하고 싶으면,
-`generate_post.py`의 `main()`에 있는 두 갈래(일반/개인금융 전용) 패턴과
-워크플로의 cron/`RUN_ARMS` 계산 패턴을 참고해서 갈래를 하나 더 추가하면
-됩니다. 다른 구글 계정 소유의 블로그를 추가하려면 그 계정으로 6단계 OAuth
-절차를 다시 밟아 별도 시크릿(예: `GOOGLE_REFRESH_TOKEN_2`)으로 등록해야
-합니다.
+`generate_post.py`의 `main()`에 있는 두 갈래(일반/AI·테크 논평 전용)
+패턴과 워크플로의 cron/`RUN_ARMS` 계산 패턴을 참고해서 갈래를 하나 더
+추가하면 됩니다. 다른 구글 계정 소유의 블로그를 추가하려면 그 계정으로
+6단계 OAuth 절차를 다시 밟아 별도 시크릿(예: `GOOGLE_REFRESH_TOKEN_2`)으로
+등록해야 합니다.
 
 ### 6. (선택) 화면 캡처 실패 시 대체용 무료 사진
 

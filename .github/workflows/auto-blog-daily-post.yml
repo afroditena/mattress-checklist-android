@@ -6,9 +6,9 @@ name: Auto Blog Daily Post
 on:
   schedule:
     - cron: "0 22 * * *" # UTC 22:00 = 한국시간(KST) 오전 7시 (다음날) - new-maind(A/B/C/E) 전용, REST_WEEKDAYS(화/일)엔 스스로 건너뜀
-    - cron: "0 0 * * *"  # UTC 00:00 = KST 오전 9시 - simple-tech-fix(개인금융 F1/F2/F3) #1
-    - cron: "0 3 * * *"  # UTC 03:00 = KST 낮 12시 - simple-tech-fix(개인금융 F1/F2/F3) #2
-    - cron: "0 8 * * *"  # UTC 08:00 = KST 오후 5시 - simple-tech-fix(개인금융 F1/F2/F3) #3
+    - cron: "0 0 * * *"  # UTC 00:00 = KST 오전 9시 - simple-tech-fix(AI/테크 논평 T1/T2) #1
+    - cron: "0 3 * * *"  # UTC 03:00 = KST 낮 12시 - simple-tech-fix(AI/테크 논평 T1/T2) #2
+    - cron: "0 8 * * *"  # UTC 08:00 = KST 오후 5시 - simple-tech-fix(AI/테크 논평 T1/T2) #3
   workflow_dispatch:
     inputs:
       fix_known_post_title:
@@ -21,15 +21,15 @@ on:
       force_niche_cluster:
         description: >-
           비워두면 평소대로 클러스터 가중치 기반 가중 무작위로 선택.
-          A/B/C/E/F1/F2/F3 중 하나를 넣으면 그 클러스터로만 강제 선택 -
-          특정 포맷이나(예: F1/F2/F3는 두 번째 Blogger 블로그로 라우팅됨)
+          A/B/C/E/T1/T2 중 하나를 넣으면 그 클러스터로만 강제 선택 -
+          특정 포맷이나(예: T1/T2는 두 번째 Blogger 블로그로 라우팅됨)
           클러스터를 미리 확인해보고 싶을 때 사용.
         required: false
         default: ""
       run_arms:
         description: >-
-          비워두면 이번 실행에서 일반 니치(new-maind)와 개인금융 전용
-          일일(simple-tech-fix, F1/F2/F3) 갈래를 둘 다 실행. "general"이면
+          비워두면 이번 실행에서 일반 니치(new-maind)와 AI/테크 논평 전용
+          일일(simple-tech-fix, T1/T2) 갈래를 둘 다 실행. "general"이면
           new-maind 갈래만, "tech_fix"면 simple-tech-fix 갈래만 강제 지정 -
           수동 검증용. 스케줄(cron) 실행은 이 값과 무관하게 어느 cron이
           켰는지로 자동 결정됨(아래 RUN_ARMS 계산 참고).

@@ -144,244 +144,164 @@
     "content_type": "comparison_alt"
   },
   {
-    "id": "f1-01",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "How to Save Your First $1,000 on an Entry-Level Salary",
-    "format": "finance_guide",
-    "content_type": "evergreen"
-  },
-  {
-    "id": "f1-02",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "Credit Score for Beginners: What Actually Affects Your Score?",
-    "format": "finance_guide",
-    "content_type": "evergreen"
-  },
-  {
-    "id": "f1-03",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "Best High-Yield Savings Accounts for Young Adults in 2026",
-    "format": "finance_guide",
+    "id": "t1-01",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "ChatGPT vs Gemini vs Claude in 2026: Which One Actually Wins Search Attention",
+    "format": "ai_commentary",
     "content_type": "comparison_alt"
   },
   {
-    "id": "f1-04",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "50/30/20 Budget Rule: Does It Work on a Low Starting Salary?",
-    "format": "finance_guide",
+    "id": "t1-02",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "Is Claude Worth Switching To in 2026? My Honest Verdict",
+    "format": "ai_commentary",
     "content_type": "evergreen"
   },
   {
-    "id": "f1-05",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "How to Build Credit From Scratch Without Going Into Debt",
-    "format": "finance_guide",
-    "content_type": "evergreen"
-  },
-  {
-    "id": "f1-06",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "Best No-Annual-Fee Credit Cards for Beginners in 2026",
-    "format": "finance_guide",
+    "id": "t1-03",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "AI Coding Assistants in 2026: Which Ones Are Actually Worth Paying For",
+    "format": "ai_commentary",
     "content_type": "comparison_alt"
   },
   {
-    "id": "f1-07",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "Emergency Fund vs Paying Off Credit Card Debt: What Comes First?",
-    "format": "finance_guide",
+    "id": "t1-04",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "Notion AI vs Standalone AI Tools: Is the Bundle Worth It in 2026?",
+    "format": "ai_commentary",
     "content_type": "comparison_alt"
   },
   {
-    "id": "f1-08",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "How Much Money Should You Save Each Month in Your 20s?",
-    "format": "finance_guide",
+    "id": "t1-05",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "The Free AI Tool Everyone Overlooks in 2026 (and Why That's a Mistake)",
+    "format": "ai_commentary",
     "content_type": "evergreen"
   },
   {
-    "id": "f1-09",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "7 Credit Score Mistakes New Workers Make in Their First Year",
-    "format": "finance_guide",
+    "id": "t1-06",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "AI Meeting Assistants in 2026: Useful Tool or Just Another Subscription?",
+    "format": "ai_commentary",
     "content_type": "evergreen"
   },
   {
-    "id": "f1-10",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "Best Free Credit Score Apps: Features, Updates, and Limits",
-    "format": "finance_guide",
+    "id": "t1-07",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "ChatGPT Plus vs Claude Pro vs Gemini Advanced: Which Paid Plan Is Actually Worth It",
+    "format": "ai_commentary",
     "content_type": "comparison_alt"
   },
   {
-    "id": "f1-11",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "How to Stop Living Paycheck to Paycheck: A Beginner Plan",
-    "format": "finance_guide",
+    "id": "t1-08",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "AI Writing Detectors in 2026: Do They Actually Work, or Are They Just Theater?",
+    "format": "ai_commentary",
     "content_type": "evergreen"
   },
   {
-    "id": "f1-12",
-    "cluster": "F1",
-    "cluster_name": "Money Basics — Savings & Credit for Entry-Level Workers",
-    "keyword": "Your First-Year Money Checklist: Savings, Credit, and Bills",
-    "format": "finance_guide",
+    "id": "t1-09",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "AI Browser Extensions in 2026: The Ones Worth Installing (and the Ones to Skip)",
+    "format": "ai_commentary",
     "content_type": "evergreen"
   },
   {
-    "id": "f2-01",
-    "cluster": "F2",
-    "cluster_name": "Beginner Wealth — Investing & Side Hustles for New Earners",
-    "keyword": "How to Start Investing With $100: A Beginner's Step-by-Step Guide",
-    "format": "finance_guide",
-    "content_type": "evergreen"
-  },
-  {
-    "id": "f2-02",
-    "cluster": "F2",
-    "cluster_name": "Beginner Wealth — Investing & Side Hustles for New Earners",
-    "keyword": "ETF vs Index Fund: What Is Better for Beginner Investors?",
-    "format": "finance_guide",
+    "id": "t1-10",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "Is Perplexity Still Worth Using in 2026, or Has ChatGPT Search Caught Up?",
+    "format": "ai_commentary",
     "content_type": "comparison_alt"
   },
   {
-    "id": "f2-03",
-    "cluster": "F2",
-    "cluster_name": "Beginner Wealth — Investing & Side Hustles for New Earners",
-    "keyword": "Best Investment Apps for Beginners in 2026: Fees and Features Compared",
-    "format": "finance_guide",
-    "content_type": "comparison_alt"
-  },
-  {
-    "id": "f2-04",
-    "cluster": "F2",
-    "cluster_name": "Beginner Wealth — Investing & Side Hustles for New Earners",
-    "keyword": "10 Realistic Side Hustles for Full-Time Employees in 2026",
-    "format": "finance_guide",
+    "id": "t1-11",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "AI Resume Tools in 2026: Do They Actually Get You More Interviews?",
+    "format": "ai_commentary",
     "content_type": "evergreen"
   },
   {
-    "id": "f2-05",
-    "cluster": "F2",
-    "cluster_name": "Beginner Wealth — Investing & Side Hustles for New Earners",
-    "keyword": "How Much Should You Invest Each Month on a Regular Salary?",
-    "format": "finance_guide",
+    "id": "t1-12",
+    "cluster": "T1",
+    "cluster_name": "AI Tool Verdicts",
+    "keyword": "The Most Overhyped AI Productivity Tool of 2026 (My Case Against It)",
+    "format": "ai_commentary",
     "content_type": "evergreen"
   },
   {
-    "id": "f2-06",
-    "cluster": "F2",
-    "cluster_name": "Beginner Wealth — Investing & Side Hustles for New Earners",
-    "keyword": "Freelancing vs Selling Digital Products: Which Side Hustle Fits You?",
-    "format": "finance_guide",
-    "content_type": "comparison_alt"
+    "id": "t2-01",
+    "cluster": "T2",
+    "cluster_name": "AI & Tech Trend Watch",
+    "keyword": "Why Google's AI Overviews Are Quietly Reshaping How People Search in 2026",
+    "format": "ai_commentary",
+    "content_type": "trend"
   },
   {
-    "id": "f2-07",
-    "cluster": "F2",
-    "cluster_name": "Beginner Wealth — Investing & Side Hustles for New Earners",
-    "keyword": "Beginner Investing Mistakes That Can Cost You Money",
-    "format": "finance_guide",
-    "content_type": "evergreen"
+    "id": "t2-02",
+    "cluster": "T2",
+    "cluster_name": "AI & Tech Trend Watch",
+    "keyword": "Is the AI Boom Turning Into an AI Bubble in 2026? A Skeptical Look",
+    "format": "ai_commentary",
+    "content_type": "trend"
   },
   {
-    "id": "f2-08",
-    "cluster": "F2",
-    "cluster_name": "Beginner Wealth — Investing & Side Hustles for New Earners",
-    "keyword": "A Simple 3-Bucket Money System: Bills, Savings, and Investing",
-    "format": "finance_guide",
-    "content_type": "evergreen"
+    "id": "t2-03",
+    "cluster": "T2",
+    "cluster_name": "AI & Tech Trend Watch",
+    "keyword": "Why Claude Keeps Climbing the Search Rankings Despite a Smaller Market Share",
+    "format": "ai_commentary",
+    "content_type": "trend"
   },
   {
-    "id": "f3-01",
-    "cluster": "F3",
-    "cluster_name": "Freelancer Money — Taxes & Cash Flow for the Self-Employed",
-    "keyword": "How Much Emergency Fund Do Freelancers Need With Irregular Income?",
-    "format": "finance_guide",
-    "content_type": "evergreen"
+    "id": "t2-04",
+    "cluster": "T2",
+    "cluster_name": "AI & Tech Trend Watch",
+    "keyword": "AI Agents Were Supposed to Change Everything in 2026 - Did They?",
+    "format": "ai_commentary",
+    "content_type": "trend"
   },
   {
-    "id": "f3-02",
-    "cluster": "F3",
-    "cluster_name": "Freelancer Money — Taxes & Cash Flow for the Self-Employed",
-    "keyword": "Freelancer Budget Template: Plan for Irregular Monthly Income",
-    "format": "finance_guide",
-    "content_type": "evergreen"
+    "id": "t2-05",
+    "cluster": "T2",
+    "cluster_name": "AI & Tech Trend Watch",
+    "keyword": "What \"AI-Powered\" Actually Means Now vs Just Marketing Fluff",
+    "format": "ai_commentary",
+    "content_type": "trend"
   },
   {
-    "id": "f3-03",
-    "cluster": "F3",
-    "cluster_name": "Freelancer Money — Taxes & Cash Flow for the Self-Employed",
-    "keyword": "How to Separate Business and Personal Money as a Freelancer",
-    "format": "finance_guide",
-    "content_type": "evergreen"
+    "id": "t2-06",
+    "cluster": "T2",
+    "cluster_name": "AI & Tech Trend Watch",
+    "keyword": "How Much of Remote Work Is Actually Run by AI Now?",
+    "format": "ai_commentary",
+    "content_type": "trend"
   },
   {
-    "id": "f3-04",
-    "cluster": "F3",
-    "cluster_name": "Freelancer Money — Taxes & Cash Flow for the Self-Employed",
-    "keyword": "Estimated Taxes for Freelancers: A Beginner's Guide for 2026",
-    "format": "finance_guide",
-    "content_type": "evergreen"
+    "id": "t2-07",
+    "cluster": "T2",
+    "cluster_name": "AI & Tech Trend Watch",
+    "keyword": "Why Most \"10 AI Tools You Need\" Listicles Are Useless (and What to Read Instead)",
+    "format": "ai_commentary",
+    "content_type": "trend"
   },
   {
-    "id": "f3-05",
-    "cluster": "F3",
-    "cluster_name": "Freelancer Money — Taxes & Cash Flow for the Self-Employed",
-    "keyword": "Best Accounting Software for Freelancers in 2026: Pricing Compared",
-    "format": "finance_guide",
-    "content_type": "comparison_alt"
-  },
-  {
-    "id": "f3-06",
-    "cluster": "F3",
-    "cluster_name": "Freelancer Money — Taxes & Cash Flow for the Self-Employed",
-    "keyword": "Quarterly Taxes for Freelancers: Dates, Payments, and Common Mistakes",
-    "format": "finance_guide",
-    "content_type": "evergreen"
-  },
-  {
-    "id": "f3-07",
-    "cluster": "F3",
-    "cluster_name": "Freelancer Money — Taxes & Cash Flow for the Self-Employed",
-    "keyword": "Freelancer Emergency Fund: Where Should You Keep It?",
-    "format": "finance_guide",
-    "content_type": "evergreen"
-  },
-  {
-    "id": "f3-08",
-    "cluster": "F3",
-    "cluster_name": "Freelancer Money — Taxes & Cash Flow for the Self-Employed",
-    "keyword": "Tax Deductions for Freelancers: Expenses to Track All Year",
-    "format": "finance_guide",
-    "content_type": "evergreen"
-  },
-  {
-    "id": "f3-09",
-    "cluster": "F3",
-    "cluster_name": "Freelancer Money — Taxes & Cash Flow for the Self-Employed",
-    "keyword": "Best Business Checking Accounts for Freelancers in 2026",
-    "format": "finance_guide",
-    "content_type": "comparison_alt"
-  },
-  {
-    "id": "f3-10",
-    "cluster": "F3",
-    "cluster_name": "Freelancer Money — Taxes & Cash Flow for the Self-Employed",
-    "keyword": "Year-End Freelancer Money Checklist: Taxes, Savings, and Records",
-    "format": "finance_guide",
-    "content_type": "evergreen"
+    "id": "t2-08",
+    "cluster": "T2",
+    "cluster_name": "AI & Tech Trend Watch",
+    "keyword": "The AI Skill Gap in 2026: What Employers Actually Want vs What People Are Learning",
+    "format": "ai_commentary",
+    "content_type": "trend"
   },
   {
     "id": "e1",
