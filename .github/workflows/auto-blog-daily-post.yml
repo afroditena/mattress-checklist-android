@@ -94,12 +94,17 @@ jobs:
           git config user.name "auto-blog-bot"
           git config user.email "actions@users.noreply.github.com"
           git add docs/_posts
-          # docs/assets(캡처한 스크린샷)와 used_topic_ids.json은 이번 실행에서
+          # docs/assets(캡처한 스크린샷)와 used_topic_ids*.json은 이번 실행에서
           # 처음 생성됐을 수도 있는 파일/폴더라, 아직 한 번도 없었으면
           # "git add"가 "pathspec did not match any files"로 실패한다
           # (manual_topic.json 계열과 같은 이유 - 존재하거나 이미 추적 중일
-          # 때만 add 한다).
+          # 때만 add 한다). used_topic_ids.json(new-maind)과
+          # used_topic_ids_second_blog.json(simple-tech-fix)은 2026-09-30부터
+          # 서로 다른 파일이다 - 하나를 공유하면 발행 빈도가 다른 두 갈래의
+          # "최근 사용" 보호 기간이 서로를 침범해서 같은 주제가 예상보다
+          # 훨씬 빨리 반복된다(실제로 중복 글이 발행돼서 분리했다).
           for f in docs/assets auto-blog-autopilot/data/used_topic_ids.json \
+                   auto-blog-autopilot/data/used_topic_ids_second_blog.json \
                    auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json; do
             if [ -e "$f" ] || git cat-file -e "HEAD:$f" 2>/dev/null; then
               git add "$f"

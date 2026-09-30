@@ -16,8 +16,14 @@
   덜 깎이는 검색 유형)을, simple-tech-fix 쪽은 AI Tool Verdicts(T1, 가중치
   3) > AI & Tech Trend Watch(T2, 가중치 2) 순으로 더 자주 고르도록
   클러스터별 가중치를 둔다(NICHE_CLUSTER_WEIGHT, select_niche_topic() 참고).
-  최근 사용한 주제 id는 data/used_topic_ids.json에 남겨서, 풀을 거의 다
-  돌기 전까지는 같은 주제가 다시 나오지 않게 한다.
+  최근 사용한 주제 id는 갈래별로 별도 파일(new-maind는
+  data/used_topic_ids.json, simple-tech-fix는
+  data/used_topic_ids_second_blog.json)에 남겨서, 각 풀을 거의 다 돌기
+  전까지는 같은 주제가 다시 나오지 않게 한다 - 2026-09-30 이전엔 파일을
+  공유해서, 발행 빈도가 3배 높은 simple-tech-fix가 20칸짜리 "최근 사용"
+  기록을 빨리 채워버리는 바람에 new-maind가 8일 만에 같은 주제(Best Free
+  Canva Alternatives)를 다시 뽑아 사실상 중복 글을 발행한 적이 있어
+  분리했다.
 - 최근에 쓴 글 제목들을 함께 넘겨서 내용이 겹치지 않게 한다.
 - 포맷은 클러스터마다 다르게 정해져 있다: How-to(A/B), Alternative(C),
   Comparison(E), AI Commentary(T1/T2) - 각각 구조가 다른 프롬프트
@@ -99,8 +105,21 @@ DOCS_DIR = PROJECT_DIR.parent / "docs"
 
 TOPICS_FILE = PROJECT_DIR / "data" / "topics.json"
 # 최근에 어떤 topics.json 항목(id)을 썼는지 남겨두는 상태 파일. select_niche_topic()
-# 참고 - 풀(30개)을 거의 다 돌기 전까지 같은 주제가 다시 나오지 않게 한다.
+# 참고 - 풀을 거의 다 돌기 전까지 같은 주제가 다시 나오지 않게 한다.
+#
+# new-maind(일반 니치)와 simple-tech-fix(두 번째 블로그) 갈래가 서로 별도
+# 파일을 쓴다 - 2026-09-30에 하나로 공유하던 걸 분리했다. 원래 하나의 파일을
+# 공유했을 때, simple-tech-fix가 하루 3번(new-maind는 하루 1번)이라 20칸짜리
+# "최근 사용" 기록을 3배 빠르게 채워서 new-maind 자신의 최근 사용 이력이
+# 실제 발행 빈도에 비해 너무 빨리 밀려났다 - 그 결과 new-maind의 24개짜리
+# 좁은 풀(A/B/C/E)에서 같은 주제(Best Free Canva Alternatives)가 8일 만에
+# 다시 뽑혀 사실상 중복 글이 발행됐고(애드센스 "가치가 별로 없는 콘텐츠"
+# 재판정의 실제 원인), 이걸 발견하고 분리했다.
 USED_TOPIC_IDS_FILE = PROJECT_DIR / "data" / "used_topic_ids.json"
+# simple-tech-fix(두 번째 블로그) 전용 사용 기록. 니치가 바뀌어도(트러블슈팅
+# -> 개인금융 -> AI/테크 논평) 파일 이름 자체는 특정 니치 이름을 붙이지 않고
+# 범용으로 둔다.
+SECOND_BLOG_USED_TOPIC_IDS_FILE = PROJECT_DIR / "data" / "used_topic_ids_second_blog.json"
 USED_TOPIC_IDS_KEEP = 20
 POSTS_DIR = DOCS_DIR / "_posts"
 
@@ -161,42 +180,55 @@ def load_niche_topics() -> list[dict]:
     return topics
 
 
-def load_used_topic_ids() -> list[str]:
-    if not USED_TOPIC_IDS_FILE.exists():
+def load_used_topic_ids(path: Path | None = None) -> list[str]:
+    # 기본값을 인자 목록에서 바로 "path: Path = USED_TOPIC_IDS_FILE"로 두면
+    # 함수 정의 시점의 값이 그대로 굳어버려서, 테스트가 gp.USED_TOPIC_IDS_FILE을
+    # 다른 경로로 바꿔치기해도 이 함수는 계속 원래 경로를 쓰는 버그가 생긴다
+    # (이 프로젝트의 다른 모든 경로 상수는 함수 몸통에서 전역을 그대로
+    # 참조해서 이 문제가 없다 - 여기도 None 기본값 + 몸통에서 읽기로 맞춘다).
+    path = path or USED_TOPIC_IDS_FILE
+    if not path.exists():
         return []
     try:
-        ids = json.loads(USED_TOPIC_IDS_FILE.read_text(encoding="utf-8"))
+        ids = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return []
     return ids if isinstance(ids, list) else []
 
 
-def save_used_topic_id(topic_id: str) -> None:
+def save_used_topic_id(topic_id: str, path: Path | None = None) -> None:
     """이번에 고른 주제 id를 사용 기록에 남긴다. USED_TOPIC_IDS_KEEP개를
-    넘으면 오래된 것부터 잘라내서, 풀(30개)을 거의 다 돌면 다시 등장할
-    수 있게 한다 (영구히 다시 안 나오게 막지 않는다 - 결국 콘텐츠는
-    새로고침이 필요해질 수 있어서)."""
-    used = load_used_topic_ids()
+    넘으면 오래된 것부터 잘라내서, 풀을 거의 다 돌면 다시 등장할 수 있게
+    한다 (영구히 다시 안 나오게 막지 않는다 - 결국 콘텐츠는 새로고침이
+    필요해질 수 있어서). path를 지정하면 그 갈래 전용 파일에 남긴다
+    (SECOND_BLOG_USED_TOPIC_IDS_FILE 참고 - new-maind/simple-tech-fix가
+    파일을 공유하면 발행 빈도가 다른 두 갈래의 "최근 사용" 보호 기간이
+    서로를 침범한다)."""
+    path = path or USED_TOPIC_IDS_FILE
+    used = load_used_topic_ids(path)
     used = [i for i in used if i != topic_id] + [topic_id]
     used = used[-USED_TOPIC_IDS_KEEP:]
-    USED_TOPIC_IDS_FILE.write_text(json.dumps(used, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(used, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def select_niche_topic(
     include_clusters: tuple[str, ...] | None = None,
     exclude_clusters: tuple[str, ...] | None = None,
+    used_ids_file: Path | None = None,
 ) -> dict:
     """topics.json 중 하나를 클러스터 가중치(NICHE_CLUSTER_WEIGHT) 기반
     가중 무작위로 고른다. include_clusters/exclude_clusters로 후보 풀을
     특정 클러스터로 좁히거나(예: SECOND_BLOG_CLUSTERS 전용 발행) 뺄 수 있다
     (예: 일반 니치 발행에서는 SECOND_BLOG_CLUSTERS를 뺀다 - 그쪽은 main()이
     별도로 처리하므로).
-    최근에 쓴 주제(used_topic_ids.json, 클러스터 구분 없이 공유)는 먼저
-    제외하고 고르되, 이번 후보 풀이 거의 다 써서 하나도 안 남으면 그
-    풀에서 다시 고른다(콘텐츠는 결국 새로고침할 수 있으니 영구 배제는
-    아니다). 선택한 주제의 id는 main()이 발행에 성공한 뒤에
-    save_used_topic_id()로 기록한다(여기서는 기록하지 않는다 - 실패한
-    회차까지 "사용됨"으로 남으면 안 되므로).
+    최근에 쓴 주제(used_ids_file, 기본은 new-maind 전용
+    USED_TOPIC_IDS_FILE - simple-tech-fix 호출은 main()이
+    SECOND_BLOG_USED_TOPIC_IDS_FILE을 넘긴다)는 먼저 제외하고 고르되,
+    이번 후보 풀이 거의 다 써서 하나도 안 남으면 그 풀에서 다시 고른다
+    (콘텐츠는 결국 새로고침할 수 있으니 영구 배제는 아니다). 선택한 주제의
+    id는 main()이 발행에 성공한 뒤에 save_used_topic_id()로 기록한다
+    (여기서는 기록하지 않는다 - 실패한 회차까지 "사용됨"으로 남으면
+    안 되므로).
 
     FORCE_NICHE_CLUSTER 환경변수(A/B/C/E/T1/T2)가 설정돼 있고 그
     클러스터가 이번 호출의 후보 풀(include/exclude 적용 후) 안에 있으면 그
@@ -204,7 +236,7 @@ def select_niche_topic(
     없으면(예: 일반 니치 호출에서 T1을 강제 지정) 무시하고 넘어간다. 평소
     스케줄 실행에는 영향 없다."""
     topics = load_niche_topics()
-    used_ids = set(load_used_topic_ids())
+    used_ids = set(load_used_topic_ids(used_ids_file))
 
     pool = topics
     if include_clusters:
@@ -1355,6 +1387,7 @@ def _run_generation(
     manual: dict | None = None,
     niche_topic: dict | None = None,
     blog_id: str | None = None,
+    used_ids_file: Path | None = None,
 ) -> None:
     """프롬프트 하나로 글 하나를 생성해서 GitHub Pages(docs/_posts, 항상
     전체 클러스터를 보관하는 단일 아카이브)에 저장하고 Blogger에도 발행한다.
@@ -1362,6 +1395,9 @@ def _run_generation(
     처리·후처리 방식이 다르다 - 제품 지정 발행은 실제 상품 이미지/Unsplash
     단일 사진, 새 니치는 SOURCES 화면 캡처 여러 장). blog_id를 지정하면
     그 블로그로, 안 주면 기본 블로그(BLOGGER_BLOG_ID, new-maind)로 발행한다.
+    used_ids_file은 niche_topic 발행 성공 후 save_used_topic_id()가 기록할
+    파일이다 - select_niche_topic() 호출 때 쓴 것과 같은 파일을 넘겨야
+    한다(호출부가 책임진다).
 
     main()이 이 함수를 최대 두 번 부른다 - "일반 니치"(A/B/C/E, 클러스터
     가중치 기반, new-maind, 화/일 휴무)와 "AI/테크 논평 전용"
@@ -1440,7 +1476,7 @@ def _run_generation(
     if manual:
         consume_manual_topic(manual)
     else:
-        save_used_topic_id(niche_topic["id"])
+        save_used_topic_id(niche_topic["id"], used_ids_file)
 
 
 def _run_arm(label: str, fn) -> bool:
@@ -1535,10 +1571,18 @@ def main() -> None:
             if not second_blog_id:
                 sys.exit(f"{SECOND_BLOG_URL} 블로그 ID를 찾지 못해 이번 글 발행을 건너뜁니다.")
             recent_titles = get_recent_titles()
-            ai_topic = select_niche_topic(include_clusters=SECOND_BLOG_CLUSTERS)
+            ai_topic = select_niche_topic(
+                include_clusters=SECOND_BLOG_CLUSTERS, used_ids_file=SECOND_BLOG_USED_TOPIC_IDS_FILE
+            )
             prompt_builder = NICHE_FORMAT_PROMPT_BUILDERS[ai_topic["format"]]
             prompt = prompt_builder(ai_topic, recent_titles)
-            _run_generation(prompt, ai_topic["keyword"], niche_topic=ai_topic, blog_id=second_blog_id)
+            _run_generation(
+                prompt,
+                ai_topic["keyword"],
+                niche_topic=ai_topic,
+                blog_id=second_blog_id,
+                used_ids_file=SECOND_BLOG_USED_TOPIC_IDS_FILE,
+            )
 
         results.append(("daily(simple-tech-fix)", _run_arm("daily(simple-tech-fix)", _run_daily_tech_fix)))
 
