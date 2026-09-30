@@ -66,6 +66,18 @@
   "내 판단(My Take)" 섹션에서 필자 관점의 평가·전망을 분명히 쓰게 한다.
   개인금융 전용이었던 FINANCE_TRUST_BLOCK(YMYL 면책 문구)은 이 니치엔
   해당하지 않아 제거했다.
+- 2026-09-30: "new-maind는 영어 대신 한글로, 한국에 맞게 검색·작성해달라"는
+  요청에 따라 new-maind(A/B/C/E)의 언어와 리서치 관점을 한국어/한국
+  독자로 전환했다 - 클러스터 구성과 topics.json의 주제 풀 자체(영어
+  키워드로 된 "컨셉 시드")는 그대로 두고, build_how_to_prompt()/
+  build_alternative_prompt()/build_comparison_prompt() 세 개만 한국어
+  출력 + 한국 시장 리서치(원화 가격, 한국어 지원 여부, 관련 있으면 국내
+  대안 서비스도 언급)를 요구하도록 다시 썼다. OUTPUT_FORMAT_BLOCK_KO을
+  새로 만들어 썼는데, 라벨(TITLE:/TAGS:/...) 자체는 parse_niche_output()이
+  정규식으로 찾는 파싱 앵커라 영어 그대로 두고 그 값(제목·태그·본문)만
+  한국어로 쓰게 했다. simple-tech-fix(T1/T2, AI/테크 논평)는 이번 전환과
+  무관하게 계속 영어/미국 독자 대상으로 남는다 - call_claude()의 시스템
+  프롬프트가 이제 두 블로그의 언어가 다르다는 것을 명시한다.
 - 이미지는 Unsplash 일반 스톡사진 대신, Claude가 SOURCES로 알려준 공식
   페이지(가격/지원문서 등, 로그인 불필요)를 Playwright로 직접 캡처해서
   쓴다 - "직접 제작/캡처/AI생성/명확한 라이선스만" 원칙상 소프트웨어
@@ -427,24 +439,30 @@ def call_claude(prompt: str, enable_web_search: bool = False) -> str:
         max_tokens=6000 if enable_web_search else 4096,
         output_config={"effort": "medium"},
         system=(
-            "You write for two automated English-language blogs aimed at a US "
-            "audience: one publishes neutral, structured guides about "
-            "AI-powered productivity tools and software alternatives/"
-            "comparisons; the other publishes opinionated AI/tech commentary - "
-            "clear, specific takes on AI tools and industry trends, not "
-            "hedge-everything reporting. Write in natural, native-sounding "
-            "American English - never a stiff or translated tone. Base every "
-            "factual claim on verified facts (use web search for anything "
-            "time-sensitive like pricing, plans, feature availability, or "
-            "market/search-trend data); never invent numbers, features, "
-            "pricing, or rankings. On the commentary blog specifically: the "
-            "facts must be verified, but the judgment and point of view are "
-            "yours to state clearly and specifically - don't retreat into "
-            "vague balance once you've made a claim. Never copy or closely "
-            "paraphrase another blog, article, or review site - synthesize "
-            "your own original explanation from what you find. Do not pad "
-            "the post with filler just to hit a word count; be concise and "
-            "useful."
+            "You write for two automated blogs aimed at two different "
+            "audiences. The first (new-maind) is a Korean-language blog for "
+            "Korean readers, publishing neutral, structured guides (how-to, "
+            "free-alternative roundups, head-to-head comparisons) about "
+            "AI-powered productivity tools and software - write these in "
+            "natural, native-sounding Korean blog prose (자연스러운 구어체), "
+            "never a stiff or translated tone, and research Korean-market "
+            "specifics (KRW pricing, Korean-language support, Korean "
+            "competitor services) wherever the prompt asks for them. The "
+            "second (simple-tech-fix) is an English-language blog for a US "
+            "audience, publishing opinionated AI/tech commentary - clear, "
+            "specific takes on AI tools and industry trends, not "
+            "hedge-everything reporting; write this one in natural American "
+            "English. For both blogs: base every factual claim on verified "
+            "facts (use web search for anything time-sensitive like pricing, "
+            "plans, feature availability, or market/search-trend data); "
+            "never invent numbers, features, pricing, or rankings. On the "
+            "commentary blog specifically: the facts must be verified, but "
+            "the judgment and point of view are yours to state clearly and "
+            "specifically - don't retreat into vague balance once you've "
+            "made a claim. Never copy or closely paraphrase another blog, "
+            "article, or review site - synthesize your own original "
+            "explanation from what you find. Do not pad the post with "
+            "filler just to hit a word count; be concise and useful."
         ),
         messages=[{"role": "user", "content": prompt}],
     )
@@ -566,6 +584,19 @@ never a third-party review/roundup site)
 ---
 (the post body in Markdown, following the structure above)"""
 
+# new-maind(A/B/C/E)용 한국어 버전. 라벨(TITLE:/TAGS:/...)은 parse_niche_output()이
+# 정규식으로 그대로 찾는 파싱 앵커라 영어 그대로 두고, 라벨이 담는 값(제목·
+# 태그·본문)만 한국어로 쓰게 한다.
+OUTPUT_FORMAT_BLOCK_KO = """출력 형식(그대로 따를 것 - 라벨은 아래 영어 그대로 쓰고, 내용만 한국어로):
+TITLE: (한국 독자에게 자연스러운 SEO 제목, 60자 이내, 낚시성 문구 금지)
+TAGS: (쉼표로 구분한 태그 3~5개, 한국어)
+KEYWORD: (이 글의 핵심 타겟 키워드/문구, 한국어)
+SOURCES: (실제로 참고하고 인용한 공식 URL 2~4개, " | "로 구분 - 각각 그 도구/서비스 \
+자체의 공식 도메인이어야 하며(가격 페이지·지원 문서 등), 제3자 리뷰나 \
+"모음" 사이트는 안 됨)
+---
+(위 구조를 따르는 마크다운 본문 - 한국어)"""
+
 
 def _niche_avoid_block(recent_titles: list[str]) -> str:
     if not recent_titles:
@@ -576,52 +607,73 @@ def _niche_avoid_block(recent_titles: list[str]) -> str:
 
 def build_how_to_prompt(topic: dict, recent_titles: list[str]) -> str:
     """How-to 포맷(클러스터 A/B): AI 도구 실사용 가이드 / 생산성·자동화 가이드.
-    AI Overview가 단순 정보성 How-to 검색의 CTR을 크게 깎아먹는다는 신호가
-    있어서 다른 포맷보다 발행 우선순위(NICHE_CLUSTER_WEIGHT)는 낮지만, 니치
-    구성상 필요한 축이라 계속 발행한다."""
-    return f"""You are writing a how-to guide for an English-language blog about AI-powered productivity tools, for a US audience.
+    2026-09-30부터: "영어 대신 한글로, 한국에 맞게 검색·작성해달라"는 요청에
+    따라 new-maind는 이 포맷부터 한국 독자 대상 한국어로 작성한다(클러스터
+    구성·주제 풀은 그대로 유지, 언어와 리서치 관점만 전환). AI Overview가
+    단순 정보성 How-to 검색의 CTR을 크게 깎아먹는다는 신호는 원래 미국
+    구글 검색 기준이라 한국(네이버 비중이 큰) 검색 환경에 그대로 들어맞는지는
+    불확실하지만, 클러스터 가중치 자체를 바꿔달라는 요청은 없어서
+    NICHE_CLUSTER_WEIGHT는 그대로 둔다."""
+    return f"""당신은 한국 독자를 대상으로 하는 AI 생산성 도구 블로그에 실릴 사용법(하우투) 글을 씁니다.
 
-Target keyword/topic: "{topic['keyword']}"
+타겟 키워드/주제: "{topic['keyword']}"
 {_niche_avoid_block(recent_titles)}
-Use web search to confirm current steps, UI labels, and feature availability before writing - tools change their interface often, and a stale step-by-step guide is worse than none. Never invent a step, button name, or menu label you haven't verified.
+이 글은 한국어로, 한국 독자 관점에서 씁니다. 웹 검색으로 현재 단계·UI
+메뉴 이름·기능 제공 여부를 확인하세요 - 도구가 한국어 인터페이스를
+제공한다면 그 한국어 메뉴 명칭 기준으로 설명하고, 한국에서 이용 가능한지
+(가입 제한, 결제 수단 등)도 확인하세요. 도구는 UI를 자주 바꾸므로,
+확인되지 않은 단계·버튼 이름·메뉴 라벨은 절대 지어내지 마세요.
 
-Structure (in this order):
-1. A direct answer to the reader's question in the first 2-3 sentences - no throat-clearing intro.
-2. "What You'll Need" - a short list of prerequisites (account, plan tier, browser, etc.), only if genuinely needed.
-3. Step-by-step instructions, with clear numbered steps or ## subheadings per step.
-4. A short FAQ (2-4 questions) addressing likely follow-up questions.
-5. A brief wrap-up (2-3 sentences).
+구성(이 순서대로):
+1. 독자의 질문에 대한 직접적인 답을 첫 2~3문장에 - 서론으로 시간 끌지 않기.
+2. "준비물" - 정말 필요한 경우에만, 계정·요금제·브라우저 등을 짧게.
+3. 번호를 매긴 단계 또는 소제목(##)으로 나눈 단계별 설명.
+4. 짧은 FAQ(2~4개) - 자주 나올 후속 질문.
+5. 짧은 마무리(2~3문장).
 
-Length: about 900-1300 words. Be concise - don't pad steps with filler just to hit a word count.
+분량: 1500~2200자 내외(한글 기준). 단계 수를 늘리려고 불필요한 내용을
+채우지 마세요.
 
-Tone: natural, native American English, plain and helpful - like a knowledgeable friend, not a stiff translated manual. No hype, no unverified claims about results or savings.
+톤: 자연스러운 한국어 블로그 구어체 - 번역투 금지, 친한 지인이 알려주는
+느낌으로. 과장이나 근거 없는 효과·수익 약속 금지.
 
-{OUTPUT_FORMAT_BLOCK}
+{OUTPUT_FORMAT_BLOCK_KO}
 """
 
 
 def build_alternative_prompt(topic: dict, recent_titles: list[str]) -> str:
-    """Alternative 포맷(클러스터 C): 유료 툴의 무료/저가 대안 목록형 글."""
-    return f"""You are writing a "best free alternatives" guide for an English-language blog about AI-powered productivity tools, for a US audience.
+    """Alternative 포맷(클러스터 C): 유료 툴의 무료/저가 대안 목록형 글.
+    2026-09-30부터 한국 독자 대상 한국어로 작성 - 글로벌 도구뿐 아니라
+    한국에서 실제로 쓰이는 국내 대안도 있으면 함께 다루도록 명시적으로
+    요구한다(예: 캔바 -> 미리캔버스)."""
+    return f"""당신은 한국 독자를 대상으로 하는 AI/생산성 소프트웨어 블로그에 실릴 "무료 대안 추천" 글을 씁니다.
 
-Target keyword/topic: "{topic['keyword']}"
+타겟 키워드/주제: "{topic['keyword']}"
 {_niche_avoid_block(recent_titles)}
-Use web search to confirm each tool's CURRENT pricing, free-tier limits, and core features - these change often and a stale price is worse than none.
+웹 검색으로 각 도구의 현재 요금제·무료 티어 한도·핵심 기능을 확인하세요
+(가격은 자주 바뀌므로, 오래된 정보를 쓰느니 확인된 것만 쓰세요). 이
+주제와 관련해 한국에서 실제로 많이 쓰이는 국내 서비스가 있다면(예: 캔바
+관련 주제라면 미리캔버스 등 - 실제로 관련 있는 경우에만, 억지로 끼워
+넣지 마세요) 최소 1개는 후보에 포함하고, 가격은 원화 기준(또는 달러와
+원화 환산 병기)으로 표기하세요.
 
-Structure (in this order):
-1. A direct answer up front: name the single best pick and 1-2 runners-up in the first 2-3 sentences.
-2. "How We Picked" - the selection criteria used (price, features, ease of use, etc.), as 3-5 short bullet points.
-3. A rundown of each alternative (3-5 tools), one ## subheading per tool, covering what it's good for and its real free-tier limits.
-4. A Markdown comparison table summarizing price, key limitation, and best-for across all tools listed.
-5. A short FAQ (2-4 questions).
+구성(이 순서대로):
+1. 첫 2~3문장에 결론부터: 가장 추천하는 1개와 차선책 1~2개를 바로 제시.
+2. "선정 기준" - 가격·기능·사용 편의성 등 선정 기준을 3~5개 불릿으로.
+3. 각 대안(3~5개) 소개 - 도구마다 소제목(##) 하나씩, 무엇에 좋은지와
+   무료 티어 한도가 실제로 어디까지인지.
+4. 가격·핵심 한계·추천 대상을 정리한 마크다운 비교표.
+5. 짧은 FAQ(2~4개).
 
-You must cite each tool's OFFICIAL pricing page in SOURCES - not a review site or a "best of" roundup article. These must be links to each vendor's own domain (e.g. canva.com/pricing, notion.so/pricing).
+SOURCES에는 반드시 각 도구의 공식 요금제 페이지를 인용하세요 - 리뷰
+사이트나 "모음" 글이 아니라 그 서비스 자체의 공식 도메인이어야 합니다.
 
-Length: about 1000-1400 words.
+분량: 1800~2500자 내외(한글 기준).
 
-Tone: natural, native American English, plain and helpful. No hype, no unverified claims.
+톤: 자연스러운 한국어 블로그 구어체 - 번역투 금지. 과장·근거 없는 주장
+금지.
 
-{OUTPUT_FORMAT_BLOCK}
+{OUTPUT_FORMAT_BLOCK_KO}
 """
 
 
@@ -677,28 +729,33 @@ You must cite real sources in SOURCES: the vendor's own official page for pricin
 
 
 def build_comparison_prompt(topic: dict, recent_titles: list[str]) -> str:
-    """Comparison 포맷(클러스터 E): 생산성 소프트웨어 정면 비교. 광고
-    친화적이고 AI Overview 노출이 적은 구매의도 검색이라 우선순위가 높다."""
-    return f"""You are writing a head-to-head software comparison for an English-language blog about productivity tools, for a US audience.
+    """Comparison 포맷(클러스터 E): 생산성 소프트웨어 정면 비교.
+    2026-09-30부터 한국 독자 대상 한국어로 작성한다."""
+    return f"""당신은 한국 독자를 대상으로 하는 생산성 소프트웨어 블로그에 실릴 정면 비교 글을 씁니다.
 
-Target keyword/topic: "{topic['keyword']}"
+타겟 키워드/주제: "{topic['keyword']}"
 {_niche_avoid_block(recent_titles)}
-Use web search to confirm both tools' CURRENT pricing, plans, and key features directly from their own official pages.
+웹 검색으로 두 도구의 현재 요금제·플랜·핵심 기능을 각 공식 페이지에서
+확인하세요. 한국에서의 이용 가능 여부, 한국어 지원 수준, 원화 환산
+가격도 함께 확인해서 언급하세요.
 
-Structure (in this order):
-1. A direct answer: a 2-3 sentence verdict summary right away - which tool wins and for whom.
-2. A Markdown comparison table across price, core features, and target user.
-3. Item-by-item analysis: ## subheadings for 3-4 key dimensions (e.g. pricing, ease of use, a key feature difference, collaboration/integrations), comparing both tools directly in each.
-4. "Who Should Use Which" - map user type to recommendation.
-5. A short FAQ (2-4 questions).
+구성(이 순서대로):
+1. 첫 2~3문장에 결론 요약: 어떤 도구가 누구에게 더 나은지 바로 제시.
+2. 가격·핵심 기능·타겟 사용자를 정리한 마크다운 비교표.
+3. 항목별 분석 - 가격, 사용 편의성, 핵심 기능 차이, 협업/연동 등 3~4개
+   소제목(##)으로 두 도구를 직접 비교.
+4. "이런 사람에게 추천" - 사용자 유형별 추천 매칭.
+5. 짧은 FAQ(2~4개).
 
-You must cite each company's own OFFICIAL pricing/spec page in SOURCES (both companies, not a third-party comparison site).
+SOURCES에는 두 회사 각각의 공식 요금제/스펙 페이지를 인용하세요(제3자
+비교 사이트 금지).
 
-Length: about 1100-1500 words.
+분량: 2000~2600자 내외(한글 기준).
 
-Tone: natural, native American English, confident but fair to both sides - no hype, no unverified claims.
+톤: 자연스러운 한국어 블로그 구어체, 양쪽에 공정하되 결론은 분명하게.
+과장 금지.
 
-{OUTPUT_FORMAT_BLOCK}
+{OUTPUT_FORMAT_BLOCK_KO}
 """
 
 
@@ -1077,61 +1134,66 @@ def resolve_blog_id_by_url(blog_url: str) -> str | None:
         return None
 
 
-BLOGGER_PRIVACY_PAGE_TITLE = "Privacy Policy"
-BLOGGER_ABOUT_PAGE_TITLE = "About"
+# 2026-09-30부터 new-maind가 한국어로 전환되면서 이 두 페이지도 한국어로
+# 다시 썼다. 기존 영어 버전은 "Zoom/Meet/Drive 등 원격근무 툴 문제 해결"을
+# 다룬다고 적혀 있었는데, 그건 클러스터 D가 이 블로그에 있었을 때(이미
+# 오래전에 두 번째 블로그로 완전히 옮겨감) 얘기라 사실과 달랐다 - 이번에
+# 다시 쓰면서 실제로 다루는 범위(A/B/C/E)에 맞게 바로잡았다.
+BLOGGER_PRIVACY_PAGE_TITLE = "개인정보처리방침"
+BLOGGER_ABOUT_PAGE_TITLE = "소개"
 
 BLOGGER_PRIVACY_PAGE_MD = """\
-This page explains what information is collected from visitors to this blog and how it's used.
+이 페이지는 이 블로그를 방문하시는 분들의 어떤 정보가 수집되고 어떻게 쓰이는지 설명합니다.
 
-## 1. Cookies and Visit Data
+## 1. 쿠키와 방문 기록
 
-This blog may use Google Analytics to analyze visit statistics. Google Analytics uses cookies to collect non-identifying statistics such as pages visited, time on page, and device type. It does not collect personally identifying information (name, contact details, etc.).
+이 블로그는 방문 통계 분석을 위해 구글 애널리틱스를 사용할 수 있습니다. 구글 애널리틱스는 방문 페이지, 체류 시간, 기기 종류 등 개인을 특정할 수 없는 통계 정보를 쿠키로 수집합니다. 이름·연락처 등 개인을 식별할 수 있는 정보는 수집하지 않습니다.
 
-## 2. Advertising
+## 2. 광고
 
-This blog may display third-party ads, including Google AdSense. Google and other ad providers may use cookies to show personalized ads based on your prior visits.
+이 블로그는 구글 애드센스를 포함한 제3자 광고를 게재할 수 있습니다. 구글 및 광고 제공업체는 이전 방문 이력을 바탕으로 맞춤 광고를 보여주기 위해 쿠키를 사용할 수 있습니다.
 
-- You can learn how Google uses cookies for advertising at the [Google Ads Policy](https://policies.google.com/technologies/ads) page.
-- You can opt out of personalized ads at [Google Ads Settings](https://adssettings.google.com).
+- 구글이 광고에 쿠키를 어떻게 사용하는지는 [Google 광고 정책](https://policies.google.com/technologies/ads) 페이지에서 확인할 수 있습니다.
+- 맞춤 광고를 원치 않으시면 [Google 광고 설정](https://adssettings.google.com)에서 해제할 수 있습니다.
 
-## 3. Content and How It's Made
+## 3. 콘텐츠와 제작 방식
 
-This blog is run by a single independent operator, and posts are written with the help of AI automation tools. The operator decides what topics to cover and takes final responsibility for what gets published. For claims that can change over time - software pricing, plans, and feature availability - the writing process confirms current facts with web search before publishing, and cites the vendor's own official page as a source rather than a third-party summary.
+이 블로그는 한 명의 개인 운영자가 운영하며, 글 작성 과정에 AI 자동화 도구의 도움을 받습니다. 다만 어떤 주제를 다룰지 결정하고 발행된 내용에 대한 최종 책임은 운영자에게 있습니다. 시간이 지나면 바뀔 수 있는 내용(소프트웨어 요금제, 플랜, 기능 제공 여부 등)은 발행 전에 웹 검색으로 최신 사실을 확인하고, 제3자 요약이 아니라 해당 서비스의 공식 페이지를 출처로 인용합니다.
 
-## 4. Affiliate Disclosure
+## 4. 제휴 링크 고지
 
-This blog currently carries no affiliate or referral links. If that changes in the future, any affiliate relationship will be disclosed directly in the relevant post and reflected here.
+이 블로그는 현재 제휴/추천 링크를 사용하지 않습니다. 추후 변경될 경우, 해당 글에 직접 고지하고 이 페이지에도 반영하겠습니다.
 
-## 5. Contact
+## 5. 문의
 
-If you have questions about this privacy policy or how this blog is run, please leave a comment on any post.
+이 개인정보처리방침이나 블로그 운영 방식에 대해 궁금한 점이 있으시면 아무 글에나 댓글로 남겨주세요.
 
-## 6. Changes
+## 6. 변경 사항
 
-This policy may change as the service or applicable law changes; updates will be reflected on this page.
+서비스나 관련 법령이 바뀌면 이 방침도 바뀔 수 있으며, 변경 사항은 이 페이지에 반영됩니다.
 """
 
 BLOGGER_ABOUT_PAGE_MD_TEMPLATE = """\
-## What This Blog Covers
+## 이 블로그는 무엇을 다루나요
 
-This blog covers AI-powered productivity tools: practical guides for tools like ChatGPT and Claude, free/budget alternatives to popular software, fixes for common remote-work tool problems (Zoom, Google Meet, Google Drive, Slack, Notion, Google Docs), and head-to-head comparisons of productivity software.
+이 블로그는 AI 생산성 도구를 다룹니다: ChatGPT·Claude 같은 도구의 실사용 가이드, 인기 소프트웨어의 무료/저가 대안 추천, 생산성 소프트웨어끼리의 정면 비교를 한국 독자 관점에서 씁니다.
 
-## About the Operator
+## 운영자 소개
 
-This blog is run by a single independent operator. The operator decides what topics to cover and when to publish, and the writing process uses AI automation tools. Final responsibility for what's published - and whether it's accurate - rests with the operator, not the AI. Posts are published a few days a week rather than daily, to keep the focus on quality over volume.
+이 블로그는 한 명의 개인 운영자가 운영합니다. 어떤 주제를 언제 다룰지는 운영자가 정하고, 글 작성 과정에 AI 자동화 도구를 활용합니다. 다만 발행된 내용의 정확성을 포함한 최종 책임은 AI가 아니라 운영자에게 있습니다. 분량보다 완성도에 집중하기 위해 매일이 아니라 주 5회 발행합니다.
 
-## How Content Is Made
+## 콘텐츠 제작 방식
 
-- Every post is fact-checked with web search before publishing, especially for anything that changes over time, like software pricing, plans, or feature availability.
-- Official vendor pages (pricing pages, support/help-center pages) are cited directly as sources rather than summarizing third-party reviews.
-- Screenshots used in posts are captured directly from the official public pages being discussed; posts don't reuse other sites' or blogs' images.
-- Posts aim to be useful and specific rather than padded out to hit a word count.
+- 소프트웨어 요금제·플랜·기능 제공 여부처럼 시점에 따라 바뀔 수 있는 내용은 발행 전에 웹 검색으로 사실을 확인합니다.
+- 제3자 리뷰를 요약하는 대신, 해당 서비스의 공식 페이지(요금제 페이지, 지원 문서 등)를 직접 출처로 인용합니다.
+- 글에 쓰이는 스크린샷은 실제로 다루는 공식 공개 페이지를 직접 캡처한 것이며, 다른 사이트나 블로그의 이미지를 그대로 가져다 쓰지 않습니다.
+- 분량을 채우기보다 실제로 도움이 되고 구체적인 내용을 목표로 합니다.
 
-This blog currently carries no affiliate or referral links. See the [Privacy Policy]({privacy_url}) page for more detail.
+이 블로그는 현재 제휴/추천 링크를 사용하지 않습니다. 자세한 내용은 [개인정보처리방침]({privacy_url}) 페이지를 참고해주세요.
 
-## Contact
+## 문의
 
-Questions or feedback about this blog can be left as a comment on any post.
+블로그에 대한 문의나 의견은 아무 글에나 댓글로 남겨주세요.
 """
 
 

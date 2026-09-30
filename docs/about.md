@@ -1,30 +1,30 @@
 ---
 layout: default
-title: About
-description: What this blog covers and how it's run
+title: 소개
+description: 이 블로그가 다루는 내용과 운영 방식
 ---
 
-## What This Blog Covers
+## 이 블로그는 무엇을 다루나요
 
-This blog covers AI-powered productivity tools: practical guides for tools like ChatGPT and Claude, free/budget alternatives to popular software, fixes for common remote-work tool problems (Zoom, Google Meet, Google Drive, Slack, Notion, Google Docs), and head-to-head comparisons of productivity software.
+이 블로그는 AI 생산성 도구를 다룹니다: ChatGPT·Claude 같은 도구의 실사용 가이드, 인기 소프트웨어의 무료/저가 대안 추천, 생산성 소프트웨어끼리의 정면 비교를 한국 독자 관점에서 씁니다.
 
-## About the Operator
+## 운영자 소개
 
-This blog is run by a single independent operator. The operator decides what topics to cover and when to publish, and the writing process uses AI automation tools. Final responsibility for what's published - and whether it's accurate - rests with the operator, not the AI. Posts are published a few days a week rather than daily, to keep the focus on quality over volume.
+이 블로그는 한 명의 개인 운영자가 운영합니다. 어떤 주제를 언제 다룰지는 운영자가 정하고, 글 작성 과정에 AI 자동화 도구를 활용합니다. 다만 발행된 내용의 정확성을 포함한 최종 책임은 AI가 아니라 운영자에게 있습니다. 분량보다 완성도에 집중하기 위해 매일이 아니라 주 5회 발행합니다.
 
-## How Content Is Made
+## 콘텐츠 제작 방식
 
-- Every post is fact-checked with web search before publishing, especially for anything that changes over time, like software pricing, plans, or feature availability.
-- Official vendor pages (pricing pages, support/help-center pages) are cited directly as sources rather than summarizing third-party reviews.
-- Screenshots used in posts are captured directly from the official public pages being discussed; posts don't reuse other sites' or blogs' images.
-- Posts aim to be useful and specific rather than padded out to hit a word count.
+- 소프트웨어 요금제·플랜·기능 제공 여부처럼 시점에 따라 바뀔 수 있는 내용은 발행 전에 웹 검색으로 사실을 확인합니다.
+- 제3자 리뷰를 요약하는 대신, 해당 서비스의 공식 페이지(요금제 페이지, 지원 문서 등)를 직접 출처로 인용합니다.
+- 글에 쓰이는 스크린샷은 실제로 다루는 공식 공개 페이지를 직접 캡처한 것이며, 다른 사이트나 블로그의 이미지를 그대로 가져다 쓰지 않습니다.
+- 분량을 채우기보다 실제로 도움이 되고 구체적인 내용을 목표로 합니다.
 
-This blog currently carries no affiliate or referral links. See the [Privacy Policy]({{ '/privacy' | relative_url }}) page for more detail.
+이 블로그는 현재 제휴/추천 링크를 사용하지 않습니다. 자세한 내용은 [개인정보처리방침]({{ '/privacy' | relative_url }}) 페이지를 참고해주세요.
 
-## A Note on Older Posts
+## 예전 글에 대한 안내
 
-Posts published before September 2026 cover a different topic (mattresses, sleep, and home health) and are in Korean - they remain published as an archive but are no longer being added to.
+2026년 9월 이전에 발행된 글은 다른 주제(매트리스·수면·홈 헬스)를 한국어로 다루던 시기의 아카이브입니다. 2026년 9월 18일부터 9월 29일까지는 지금과 같은 주제(AI 생산성 도구)를 영어로, 미국 독자를 대상으로 다뤘던 시기의 아카이브입니다. 두 시기 모두 더 이상 새 글이 추가되지 않으며, 2026년 9월 30일부터는 지금 이 방식대로(AI 생산성 도구, 한국어, 한국 독자 대상) 계속 발행됩니다.
 
-## Contact
+## 문의
 
-Questions or feedback about this blog can be left as a comment on any post.
+블로그에 대한 문의나 의견은 아무 글에나 댓글로 남겨주세요.

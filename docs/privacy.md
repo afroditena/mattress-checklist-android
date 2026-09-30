@@ -1,36 +1,36 @@
 ---
 layout: default
-title: Privacy Policy
-description: How this blog handles visitor data and discloses advertising/affiliate relationships
+title: 개인정보처리방침
+description: 이 블로그의 방문자 정보 처리 방식과 광고/제휴 관계 고지
 ---
 
-Effective: September 5, 2026 (last revised: September 18, 2026)
+시행일: 2026년 9월 5일 (최종 수정: 2026년 9월 30일)
 
-This page explains what information is collected from visitors to this blog ({{ site.title }}) and how it's used.
+이 페이지는 이 블로그({{ site.title }})를 방문하시는 분들의 어떤 정보가 수집되고 어떻게 쓰이는지 설명합니다.
 
-## 1. Cookies and Visit Data
+## 1. 쿠키와 방문 기록
 
-This blog may use Google Analytics to analyze visit statistics. Google Analytics uses cookies to collect non-identifying statistics such as pages visited, time on page, and device type. It does not collect personally identifying information (name, contact details, etc.).
+이 블로그는 방문 통계 분석을 위해 구글 애널리틱스를 사용할 수 있습니다. 구글 애널리틱스는 방문 페이지, 체류 시간, 기기 종류 등 개인을 특정할 수 없는 통계 정보를 쿠키로 수집합니다. 이름·연락처 등 개인을 식별할 수 있는 정보는 수집하지 않습니다.
 
-## 2. Advertising
+## 2. 광고
 
-This blog may display third-party ads, including Google AdSense. Google and other ad providers may use cookies to show personalized ads based on your prior visits.
+이 블로그는 구글 애드센스를 포함한 제3자 광고를 게재할 수 있습니다. 구글 및 광고 제공업체는 이전 방문 이력을 바탕으로 맞춤 광고를 보여주기 위해 쿠키를 사용할 수 있습니다.
 
-- You can learn how Google uses cookies for advertising at the [Google Ads Policy](https://policies.google.com/technologies/ads) page.
-- You can opt out of personalized ads at [Google Ads Settings](https://adssettings.google.com).
+- 구글이 광고에 쿠키를 어떻게 사용하는지는 [Google 광고 정책](https://policies.google.com/technologies/ads) 페이지에서 확인할 수 있습니다.
+- 맞춤 광고를 원치 않으시면 [Google 광고 설정](https://adssettings.google.com)에서 해제할 수 있습니다.
 
-## 3. Affiliate Disclosure
+## 3. 제휴 링크 고지
 
-This blog currently carries no affiliate or referral links. If that changes in the future, any affiliate relationship will be disclosed directly in the relevant post and reflected here.
+이 블로그는 현재 제휴/추천 링크를 사용하지 않습니다. 추후 변경될 경우, 해당 글에 직접 고지하고 이 페이지에도 반영하겠습니다.
 
-## 4. Content and How It's Made
+## 4. 콘텐츠와 제작 방식
 
-This blog is run by a single independent operator, and posts are written with the help of AI automation tools, but the operator decides what topics to cover and takes final responsibility for what's published. For claims that can change over time - software pricing, plans, and feature availability - the writing process confirms current facts with web search before publishing, and cites the vendor's own official page as a source rather than a third-party summary. See the [About]({{ '/about' | relative_url }}) page for more detail.
+이 블로그는 한 명의 개인 운영자가 운영하며, 글 작성 과정에 AI 자동화 도구의 도움을 받습니다. 다만 어떤 주제를 다룰지 결정하고 발행된 내용에 대한 최종 책임은 운영자에게 있습니다. 시간이 지나면 바뀔 수 있는 내용(소프트웨어 요금제, 플랜, 기능 제공 여부 등)은 발행 전에 웹 검색으로 최신 사실을 확인하고, 제3자 요약이 아니라 해당 서비스의 공식 페이지를 출처로 인용합니다. 자세한 내용은 [소개]({{ '/about' | relative_url }}) 페이지를 참고해주세요.
 
-## 5. Contact
+## 5. 문의
 
-If you have questions about this privacy policy or how this blog is run, please leave a comment on any post.
+이 개인정보처리방침이나 블로그 운영 방식에 대해 궁금한 점이 있으시면 아무 글에나 댓글로 남겨주세요.
 
-## 6. Changes
+## 6. 변경 사항
 
-This policy may change as the service or applicable law changes; updates will be reflected on this page.
+서비스나 관련 법령이 바뀌면 이 방침도 바뀔 수 있으며, 변경 사항은 이 페이지에 반영됩니다.

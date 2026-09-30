@@ -1,11 +1,14 @@
-title: "AI Productivity Digest"
-description: "Practical guides, alternatives, and troubleshooting for AI-powered productivity tools"
+title: "AI 생산성 다이제스트"
+description: "AI 생산성 도구 실사용 가이드, 무료 대안 추천, 소프트웨어 비교"
 markdown: kramdown
 plugins:
   - jekyll-feed
 
 # 자동화 스크립트가 이 폴더(docs/_posts)에 새 글을 커밋합니다 (주 5회, REST_WEEKDAYS 참고).
 # 2026-09-18 이전 글들은 이전 니치(매트리스/건강/재무, 한국어)의 아카이브로 남아있습니다.
+# 2026-09-18~09-29 글들은 같은 니치(AI 생산성 도구)를 영어/미국 독자
+# 대상으로 쓰던 시기의 아카이브입니다 - 2026-09-30부터 한국어/한국 독자
+# 대상으로 다시 전환했습니다(docs/about.md 참고).
 
 # GA4 측정 ID (예: "G-XXXXXXXXXX"). 이 값은 비밀값이 아니라 공개 페이지에
 # 그대로 노출되는 값이라 GitHub Secrets가 아니라 여기 직접 적으면 됩니다.
