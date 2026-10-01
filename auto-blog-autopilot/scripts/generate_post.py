@@ -78,6 +78,15 @@
   한국어로 쓰게 했다. simple-tech-fix(T1/T2, AI/테크 논평)는 이번 전환과
   무관하게 계속 영어/미국 독자 대상으로 남는다 - call_claude()의 시스템
   프롬프트가 이제 두 블로그의 언어가 다르다는 것을 명시한다.
+- 2026-10-01: 사용자가 Simple Tech Fix 전용 "글쓰기 지침" 문서(구조·문체·
+  정직성 규칙, 금지 표현 목록, 의견 주입 방법, 좋은/나쁜 예시, 발행 전
+  체크리스트 포함)를 제공하며 그대로 반영해달라고 요청했다.
+  build_ai_commentary_prompt()를 이 문서 기준으로 전면 재작성했다 -
+  자세한 내용은 그 함수 바로 위 주석 참고(문서의 6단계 워크플로를 API
+  호출 1번 안에서의 "초안 -> 자체 검토 -> 최종본만 출력" 지시로 녹여내
+  비용을 늘리지 않았다는 점이 핵심). max_tokens(enable_web_search=True
+  경로)를 6000 -> 7000으로 올려서 검색 + 자체 검토를 한 응답 안에서
+  하기에 더 여유를 뒀다.
 - 이미지는 Unsplash 일반 스톡사진 대신, Claude가 SOURCES로 알려준 공식
   페이지(가격/지원문서 등, 로그인 불필요)를 Playwright로 직접 캡처해서
   쓴다 - "직접 제작/캡처/AI생성/명확한 라이선스만" 원칙상 소프트웨어
@@ -431,12 +440,16 @@ def call_claude(prompt: str, enable_web_search: bool = False) -> str:
     실제 검색 결과를 근거로 본문을 쓰게 한다 (건강/생활정보처럼 사실관계가
     중요한 정보성 글에서, 모델의 사전 지식만으로 지어내지 않도록 하기 위함).
     검색 도구가 쓰이면 응답 content에 텍스트 블록이 여러 개로 나뉠 수 있어서,
-    첫 블록만 쓰지 않고 전부 이어붙인다."""
+    첫 블록만 쓰지 않고 전부 이어붙인다. max_tokens=7000(기존 6000에서
+    상향, 2026-10-01): build_ai_commentary_prompt()가 이제 "초안을 쓰고
+    스스로 체크리스트에 맞춰 검토·수정한 뒤 최종본만 출력하라"는 자체 검토
+    단계를 한 응답 안에서 요구하는데, 검색 여러 번 + 자체 검토까지 하기엔
+    기존 6000 토큰이 빠듯할 수 있어 여유를 뒀다."""
     client = anthropic.Anthropic()
 
     kwargs = dict(
         model=MODEL,
-        max_tokens=6000 if enable_web_search else 4096,
+        max_tokens=7000 if enable_web_search else 4096,
         output_config={"effort": "medium"},
         system=(
             "You write for two automated blogs aimed at two different "
@@ -690,39 +703,101 @@ AI_TREND_CONTEXT_BLOCK = """Background context (verified via research, current a
 - Digital banking, fintech, and AI-adjacent productivity SaaS remain some of the most heavily searched commercial categories alongside AI tools themselves."""
 
 
+# 2026-10-01: 사용자가 Simple Tech Fix 전용 "글쓰기 지침" 문서(한국어로 관리,
+# 본문은 영어)를 통째로 제공하며 이걸 지침으로 삼아달라고 요청했다. 문서는
+# 구조·문체·정직성 규칙과, "리서치 -> 초안 -> 편집 -> 재작성 -> 팩트체크 ->
+# 점수 확인" 6단계 워크플로를 명시했는데, 6단계를 전부 별도 API 호출로
+# 구현하면 이 갈래의 Claude 호출 비용이 그대로 몇 배로 뛴다(이 갈래는 이미
+# 하루 3번 돈다). 그래서 "체크리스트를 통과 못 하면 3~4단계를 반복한다"는
+# 조건부 재작성 의도를, 한 번의 호출 안에서 "초안을 쓴 뒤 스스로 아래
+# 체크리스트에 맞춰 검토하고 고쳐서 최종본만 낸다"는 자체 검토 지시로
+# 녹여냈다 - 비용을 늘리지 않으면서 문서의 모든 실질적 규칙(구조, 금지
+# 표현, 의견 주입 방법, 정직성 규칙, 좋은/나쁜 예시, 체크리스트)은 빠짐없이
+# 반영했다. 정직성 규칙(직접 써보지 않은 경험을 지어내지 않는다) 중
+# "사람이 직접 넣는 부분이 비면 정직하게 '문서를 읽고 쓴 분석'으로 쓴다"는
+# 조항 덕분에, 사람 개입 없이 완전 자동으로 돌아가는 이 파이프라인 특성과
+# 지침이 이미 맞아떨어진다 - 별도 수정 없이 그대로 쓸 수 있었다.
 def build_ai_commentary_prompt(topic: dict, recent_titles: list[str]) -> str:
-    """AI Commentary 포맷(클러스터 T1/T2, simple-tech-fix 전용): 주관적
-    판단이 들어간 AI/테크 논평·평가. 2026-09-26 니치 피벗(개인금융 ->
-    AI/테크 논평) 이후 이 갈래의 유일한 포맷이다 - "금융은 빼고 테크/AI로
-    바꿔달라, 발행 전에 우리 대화(AI/테크 트렌드 리서치)를 기준으로
-    주관적 판단과 내용을 더해서 써달라"는 요청에 따라 만들었다.
-    new-maind(A/B/C/E)의 중립적인 How-to/대안/비교 가이드와 겹치지 않게,
-    이 포맷은 결론(=필자의 판단)을 먼저 내리고 "My Take" 섹션에서 그
-    판단의 근거·전망을 명시적으로 쓰게 한다 - 사실(가격/기능/검색 순위 등)
-    은 여전히 web_search로 검증해서 지어내지 않되, 그 사실을 어떻게
-    해석하느냐는 필자 관점을 분명히 드러내야 한다."""
-    return f"""You are writing an opinionated AI/tech commentary piece for a US audience, for an English-language blog that gives clear, well-reasoned takes on AI tools and tech trends - not neutral, hedge-everything reporting.
+    """AI Commentary 포맷(클러스터 T1/T2, simple-tech-fix 전용). 2026-10-01
+    부터 사용자가 제공한 "Simple Tech Fix 블로그 글쓰기 지침" 문서를 그대로
+    반영한다(위 모듈 주석 참고) - 결론 먼저, 출처 기반 근거, 불편한 사실도
+    포함, 의견은 의견이라고 표시, 직접 경험을 지어내지 않는다는 원칙이
+    핵심이다."""
+    return f"""You are writing for Simple Tech Fix, an English-language blog that solves everyday problems people run into with work tools (Slack, Google Meet, Calendly, Google Workspace, etc.) and AI tools, in plain English, step by step. Readers are ordinary people who use these tools for work and don't need to be fluent in tech jargon to follow along.
 
 Content hub for this post: {topic['cluster_name']}
 Target keyword/topic: "{topic['keyword']}"
 {_niche_avoid_block(recent_titles)}
 {AI_TREND_CONTEXT_BLOCK}
 
-Use web search to confirm any CURRENT fact you cite (pricing, features, plan limits, market/search-share signals, release dates) directly from an official vendor page or a credible primary source (an official company blog, an analyst report, a reputable tech publication's reporting). Never invent a price, feature, ranking, or statistic. The FACTS must be verified - but the JUDGMENT is yours to make and should be clearly, specifically stated, not hedged into mush.
+## Research and sourcing
 
-Structure (in this order):
-1. Open with your verdict in the first 2-3 sentences - a specific, opinionated bottom line, not "it depends" (this doubles as a featured-snippet-ready quick answer).
-2. "What's Actually Going On" - 2-4 ## subheadings laying out the real, verified facts behind this topic (pricing, features, adoption, trend data) - this is the evidence, not yet the opinion.
-3. "My Take" - one clearly marked ## section where you argue your case: why you land where you do, what most takes on this topic get wrong, and what you'd tell a skeptical reader who disagrees.
-4. A brief, fair counterpoint - acknowledge the strongest argument against your take before restating why you still land where you do. This keeps the piece credible instead of a rant.
-5. "Bottom Line" - a concrete, concise recommendation: who should care about this and what they should actually do about it.
-6. A short FAQ (2-4 questions).
+Use web search and prefer primary sources: the vendor's own official blog/help docs/changelog, not third-party summaries. Never invent a price, feature, limit, date, or statistic - if you can't confirm something, say so in the piece rather than guessing (see Honesty rules below). Don't quote long passages from a source; paraphrase in your own words, and if you do quote directly, keep it short and use at most one direct quote per source. Don't mirror the structure of any single source article. List every source you actually used as a link at the end (see SOURCES in the output format).
 
-Length: about 1000-1500 words. Specific and opinionated beats safe and vague - a reader should be able to tell you a strong, memorable point of view, not just a summary of facts.
+## Structure
 
-Tone: natural, native American English, confident and direct, first-person where it helps ("I think", "in my view") - like a sharp tech columnist, not a press release or a stiff comparison chart. No hype for hype's sake, but also no false balance - take a real position.
+Vary the number of subheadings and paragraph lengths from post to post - repeating the exact same skeleton every time reads as AI-generated. Use this as a flexible template, not a rigid fill-in-the-blanks form:
 
-You must cite real sources in SOURCES: the vendor's own official page for pricing/feature facts, and/or a credible primary source (official company blog, analyst report, reputable tech publication) for trend or market-share claims - never an unverified blog post or a content-mill "best of" roundup.
+1. **Title** that telegraphs a verdict (e.g. "Turn It On, but Ask the Room First" - not a generic "X: A Complete Guide").
+2. **My verdict:** one paragraph, right after the title. State who this is good for and who it isn't, and briefly say why you're leading with the verdict instead of easing into it.
+3. **## What's Actually Going On** - what it is / how it works (numbered steps if that helps), who can actually use it, when it rolled out. Source-backed, not opinion yet.
+4. **## Where It Breaks** - limitations, failure conditions, common misunderstandings, as a short list.
+5. **## Fix It: Check These in Order** - *only if this post is genuinely about troubleshooting a specific problem*: most likely cause first, then less common ones. Skip this section entirely for a pure tool-verdict or trend piece where there's nothing to "fix."
+6. **A risk/caution section** - *only if genuinely relevant* (legal, security, privacy implications).
+7. **## What I Learned While Writing This (and What I Think)** - 2-3 things that surprised you while researching this, your own opinion clearly marked as opinion, and an honest note on this piece's limits (did you actually use this yourself, or just read the docs - see Honesty rules).
+8. **Sources:** link list.
+
+## Readability
+
+Paragraphs: 1-4 sentences. Numbered lists for steps. Tables for comparisons. Bullets for lists - but don't let the whole piece turn into bullet points.
+
+Length: roughly 800-1200 words.
+
+## Writing like a human, not an AI
+
+- Order within a point: verdict, then reason, then exception.
+- Vary sentence length on purpose - a short sentence after a long one. An occasional one-sentence paragraph is fine.
+- Be concrete: not "a variety of features" but "summaries, action items, and the full transcript."
+- Never hide an uncomfortable fact: every post needs at least one real limitation, pricing catch, or thing the tool can't do.
+- Explain things through a situation the reader will actually hit ("If the button isn't showing up, check these in order").
+- Mark opinions as opinions: "I think", "My take", "In my view" - don't blend opinion into stated fact.
+
+## Do not do this (instant AI-writing tells)
+
+- Clichés: "In today's fast-paced world", "In conclusion", "It's important to note", "Let's dive in", "game-changer", "unlock the power of", "seamlessly", "revolutionary".
+- A tidy summary-plus-pep-talk ending ("So go ahead and try it today!").
+- Every subheading the same length, following the identical pattern.
+- Consecutive sentences starting with the same word.
+- Baseless praise or ad-copy tone.
+- The reflexive habit of grouping everything into sets of exactly three (three benefits, three tips, three takeaways, repeated throughout).
+
+## How to actually inject a point of view
+
+1. Keep fact and opinion visibly separate: facts carry a source; opinions carry "I think".
+2. Give every opinion a reason: "I think this matters because...".
+3. Concede at least one line to the other side ("Some teams will love this, but...").
+4. Make opinions concrete judgments, not hedges: "Use it for planned team meetings; skip it for feedback conversations" - not "it has pros and cons."
+5. Never land on vague neutrality ("there are pros and cons") as your ending.
+
+## Honesty rules (the most important section)
+
+- Never fake hands-on testing you didn't do. Forbidden unless genuinely true: "I tested this for two weeks...", "In my experience...". Fine to say instead: "I read the documentation but didn't run it in a real meeting."
+- If you couldn't confirm something, say exactly that: "I couldn't find an answer to that."
+- Never state a number, price, or date that your sources don't actually support.
+- For legal, medical, or financial angles, disclose the limit plainly ("I'm not a lawyer") and don't make definitive claims.
+
+## Before you finalize
+
+Silently review your own draft against this checklist and fix anything that fails, then output only the corrected final version (don't show your draft or the review itself):
+- Structure: verdict in the first paragraph; who it's for and who it isn't; at least one real limitation or failure condition; a closing "what I learned / my take / this piece's limits" section; sources listed.
+- Style: zero banned clichés; sentence lengths actually vary; no run of consecutive sentences starting with the same word; every opinion carries "I think" (or equivalent) plus a reason; no tidy summary-and-CTA ending.
+- Honesty: no invented hands-on experience; zero unsourced numbers; anything unconfirmed is labeled as such; a legal/medical/financial angle (if present) carries an explicit limits disclaimer.
+
+## Example: the difference a verdict makes
+
+Bad opening (don't write like this): "In today's fast-paced digital world, meetings are more important than ever. Google Meet has introduced an exciting new feature that could revolutionize how you take notes!"
+
+Good opening (write like this): "**My verdict:** Meet's new in-person 'Take notes' button is worth using for planned, single-language meetings that run at least 15 minutes, as long as you're on an eligible plan and everyone in the room knows it's on. It's a bad idea as a quiet background recorder." - this one has a judgment, a condition, and who it's wrong for.
 
 {OUTPUT_FORMAT_BLOCK}
 """
@@ -1234,12 +1309,9 @@ This policy may change as the service or applicable law changes; updates will be
 SECOND_BLOG_ABOUT_PAGE_MD_TEMPLATE = """\
 ## What This Blog Covers
 
-This blog gives clear, opinionated takes on AI tools and tech trends, across two ongoing series:
+Simple Tech Fix solves everyday problems people run into with work tools (Slack, Google Meet, Calendly, Google Workspace, and the like) and AI tools, in plain English, step by step - plus clear, opinionated verdicts on individual AI tools and where the AI/tech industry is actually heading, cutting past the marketing language.
 
-- **AI Tool Verdicts** - direct, specific judgments on individual AI tools and head-to-head matchups: what's actually worth paying for, and what's overhyped.
-- **AI & Tech Trend Watch** - commentary on where the AI and tech industry is actually heading, cutting past the marketing language.
-
-Each post opens with a clear verdict, lays out the verified facts behind it, and then argues the case in a dedicated "My Take" section - including a fair look at the strongest counterargument - before landing on a concrete bottom line.
+Each post opens with a verdict - who it's for and who it isn't - lays out the verified facts behind it, and is honest about what the writing process could and couldn't confirm firsthand, before landing on a concrete bottom line.
 
 ## About the Operator
 
@@ -1249,6 +1321,7 @@ This blog is run by a single independent operator, as a focused companion to a b
 
 - Every fact cited (pricing, features, plan limits, search/market trend data) is checked against an official vendor page or a credible primary source (an official company blog, an analyst report, reputable tech reporting) before publishing - never an unverified blog post or a content-mill roundup.
 - The facts are verified, but the judgment is the blog's own - posts take a real position instead of hedging into "it depends."
+- Posts never claim hands-on testing that didn't happen; when a post is based on reading the documentation rather than real first-hand use, it says so plainly.
 - Posts aim to be specific and opinionated rather than padded out to hit a word count.
 
 This blog currently carries no affiliate or referral links. See the [Privacy Policy]({privacy_url}) page for more detail.

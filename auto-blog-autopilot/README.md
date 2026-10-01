@@ -77,12 +77,23 @@
    - **Alternative**: 직접 답변 → 선정 기준 → 목록형 비교 → 표 → FAQ
    - **Comparison**: 직접 답변(결론 요약) → 비교표 → 항목별 분석 → 추천 대상 → FAQ
    - **AI Commentary** (T1/T2 전용, simple-tech-fix, 영어/미국 독자 유지):
-     필자의 결론(퀵 앤서)을 먼저 던지고 →
-     "What's Actually Going On"(검증된 사실) → "My Take"(주관적 판단·근거를
-     명시적으로 밝히는 섹션) → 반대 논거에 대한 공정한 언급 → "Bottom Line"
-     → FAQ 순서로 씁니다. new-maind의 중립적인 How-to/대안/비교 가이드와
-     겹치지 않도록 의도적으로 "결론을 분명히 내리는 논평" 포맷으로
-     차별화했습니다. 가격·기능·검색 순위 등 사실은 여전히 `web_search`로
+     2026-10-01부터 사용자가 제공한 "Simple Tech Fix 글쓰기 지침" 문서를
+     그대로 반영합니다 - **My verdict:** 단락(누구에게 맞고 안 맞는지까지)
+     → "What's Actually Going On"(검증된 사실) → "Where It Breaks"(한계) →
+     (문제 해결형 글이면만) "Fix It" → "What I Learned While Writing This
+     (and What I Think)"(주관적 판단 + 이 글의 한계를 정직하게 명시) →
+     Sources 순서로 씁니다. 글마다 소제목 개수·문단 길이를 의도적으로
+     다르게 하고, 상투 표현("In today's fast-paced world" 등)·깔끔한
+     요약+다짐식 마무리·3개씩 묶어 나열하는 습관 등 "AI가 쓴 티" 나는
+     패턴을 명시적으로 금지합니다. 가장 중요한 건 **정직성 규칙**입니다:
+     직접 써보지 않았으면 "I tested this for two weeks" 같은 경험을
+     지어내지 않고 "I read the documentation but didn't run it in a real
+     meeting"처럼 정직하게 쓰며, 확인 못 한 건 확인 못 했다고 씁니다.
+     문서의 "리서치 → 초안 → 편집 → 재작성 → 팩트체크 → 점수 확인" 6단계
+     워크플로는 API 호출을 늘리지 않기 위해, 한 번의 호출 안에서 "초안을
+     쓰고 스스로 체크리스트에 맞춰 검토·수정한 뒤 최종본만 출력하라"는
+     자체 검토 지시로 구현했습니다(`build_ai_commentary_prompt()` 바로 위
+     주석 참고). 가격·기능·검색 순위 등 사실은 여전히 `web_search`로
      검증하게 하고 지어내지 못하게 하지만, 그 사실을 어떻게 해석하느냐는
      필자(모델) 관점을 분명히 드러내라고 명시적으로 요구합니다.
 
