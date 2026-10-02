@@ -1577,8 +1577,16 @@ def audit_blog_posts() -> None:
     for r in rows:
         by_day[r[0][:10]] = by_day.get(r[0][:10], 0) + 1
     print(f"하루 3개 이상 발행한 날: { {d: n for d, n in sorted(by_day.items()) if n >= 3} }")
-    short = [(r[7], r[3]) for r in rows if r[3] < 2500]
-    print(f"본문 2500자 미만 글 {len(short)}개: {short}")
+    short = [r for r in rows if r[3] < 2500 and r[1] == "LIVE"]
+    print(f"공개(LIVE) 글 중 본문 2500자 미만: {len(short)}개")
+    domains = {}
+    for p in posts:
+        if p.get("status") != "LIVE":
+            continue
+        for host in re.findall(r'href=["\']https?://([^/"\']+)', p.get("content", "") or ""):
+            if not re.search(r"blogspot\.com$|github\.io$", host):
+                domains[host] = domains.get(host, 0) + 1
+    print(f"공개 글 외부 링크 도메인 상위: {sorted(domains.items(), key=lambda kv: -kv[1])[:12]}")
     titles = [(r[7], r[9]) for r in rows]
     dup_pairs = []
     for i in range(len(titles)):
@@ -1587,10 +1595,12 @@ def audit_blog_posts() -> None:
                 dup_pairs.append((titles[i][0], titles[j][0]))
     print(f"제목이 75% 이상 비슷한 쌍 {len(dup_pairs)}개: {dup_pairs}")
 
-    pages = _blogger_get(f"{base}/pages?fetchBodies=false", access_token).get("items", []) or []
+    pages = _blogger_get(f"{base}/pages?fetchBodies=true", access_token).get("items", []) or []
     print(f"\n=== 정적 페이지 {len(pages)}개 ===")
     for pg in pages:
-        print(f"{pg.get('status')} | {pg.get('title')} | {pg.get('url')}")
+        excerpt = html_lib.unescape(re.sub(r"<[^>]+>", " ", pg.get("content", "") or ""))
+        excerpt = re.sub(r"\s+", " ", excerpt).strip()[:220]
+        print(f"id={pg.get('id')} | {pg.get('title')} | {pg.get('url')} | {excerpt}")
 
 
 def _run_generation(
