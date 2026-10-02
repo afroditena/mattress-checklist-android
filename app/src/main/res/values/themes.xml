@@ -1,0 +1,4 @@
+<resources>
+    <!-- androidx 의존성 없이 플랫폼 기본 테마만으로 동작하는 단순한 WebView 앱 테마 -->
+    <style name="Theme.MattressChecklist" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
