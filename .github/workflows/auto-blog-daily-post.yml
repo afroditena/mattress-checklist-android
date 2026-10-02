@@ -18,6 +18,14 @@ on:
           (fix_known_post_title() 참고). 평소엔 항상 false로 두면 됨.
         required: false
         default: "false"
+      blog_audit:
+        description: >-
+          true로 실행하면 평소 발행을 건너뛰고, new-maind Blogger에 실제로
+          올라가 있는 글/페이지 목록(언어·길이·제목 중복 등)을 로그로만
+          출력하는 읽기 전용 점검을 함(audit_blog_posts() 참고). 아무것도
+          수정하지 않음. 평소엔 항상 false로 두면 됨.
+        required: false
+        default: "false"
       force_niche_cluster:
         description: >-
           비워두면 평소대로 클러스터 가중치 기반 가중 무작위로 선택.
@@ -66,6 +74,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RUN_FIX_KNOWN_POST_TITLE: ${{ github.event.inputs.fix_known_post_title || 'false' }}
+          RUN_BLOG_AUDIT: ${{ github.event.inputs.blog_audit || 'false' }}
           FORCE_NICHE_CLUSTER: ${{ github.event.inputs.force_niche_cluster || '' }}
           # 스케줄(cron) 실행이면 어느 cron이 켰는지로 갈래를 자동 결정하고
           # (아래 4개 cron 중 "0 22 * * *"만 new-maind 전용, 나머지 3개는

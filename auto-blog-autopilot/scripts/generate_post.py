@@ -1515,6 +1515,84 @@ def fix_known_post_title() -> None:
             print(f"Blogger 글 제목 수정 실패: {e}")
 
 
+def _blogger_get(url: str, access_token: str) -> dict:
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return json.loads(resp.read())
+
+
+def audit_blog_posts() -> None:
+    """읽기 전용 점검(RUN_BLOG_AUDIT=true): new-maind(BLOGGER_BLOG_ID)에 실제로
+    올라가 있는 글/페이지를 전부 읽어서 언어·길이·발행일·제목 중복·외부링크
+    수를 로그로 찍는다. 아무것도 수정/삭제하지 않는다. 2026-10-02, 애드센스
+    "가치가 별로 없는 콘텐츠" 사유가 계속되는데 docs/_posts는 두 블로그
+    글이 섞인 미러라 new-maind에 실제로 뭐가 있는지 알 수가 없어서 만들었다."""
+    import difflib
+    import html as html_lib
+
+    if not blogger_configured():
+        print("Blogger 인증 정보가 없어 점검을 건너뜁니다.")
+        return
+    access_token = get_google_access_token()
+    base = f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}"
+
+    info = _blogger_get(base, access_token)
+    print(f"블로그: {info.get('name')} ({info.get('url')})")
+    print(f"  글 {info.get('posts', {}).get('totalItems')}개 / 페이지 {info.get('pages', {}).get('totalItems')}개")
+
+    posts, page_token = [], ""
+    while True:
+        qs = "fetchBodies=true&maxResults=50&orderBy=published&status=live&status=draft&status=scheduled"
+        if page_token:
+            qs += f"&pageToken={urllib.parse.quote(page_token)}"
+        data = _blogger_get(f"{base}/posts?{qs}", access_token)
+        posts.extend(data.get("items", []) or [])
+        page_token = data.get("nextPageToken", "")
+        if not page_token:
+            break
+
+    print(f"\n=== 글 {len(posts)}개 (발행일 오름차순) ===")
+    rows = []
+    for p in posts:
+        body = p.get("content", "") or ""
+        text = html_lib.unescape(re.sub(r"<[^>]+>", " ", body))
+        hangul = len(re.findall(r"[가-힣]", text))
+        latin = len(re.findall(r"[A-Za-z]", text))
+        lang = "KO" if hangul > latin else "EN"
+        chars = len(re.sub(r"\s+", "", text))
+        ext_links = len(re.findall(r'href=["\']https?://(?!(?:[\w.-]*blogspot\.com|[\w.-]*github\.io))', body))
+        imgs = len(re.findall(r"<img\b", body))
+        coupang = "Y" if ("coupang" in body.lower() or "쿠팡" in body) else "-"
+        rows.append((p.get("published", ""), p.get("status", ""), lang, chars, imgs, ext_links, coupang, p.get("title", ""), p.get("url", ""), p.get("id", "")))
+    rows.sort()
+    for pub, status, lang, chars, imgs, ext, cp, title, url, pid in rows:
+        print(f"{pub[:16]} | {status:5} | {lang} | {chars:5}자 | img={imgs} | ext={ext} | cp={cp} | id={pid} | {title} | {url}")
+
+    print("\n=== 요약 ===")
+    by_lang = {}
+    for r in rows:
+        by_lang[r[2]] = by_lang.get(r[2], 0) + 1
+    print(f"언어별: {by_lang}")
+    by_day = {}
+    for r in rows:
+        by_day[r[0][:10]] = by_day.get(r[0][:10], 0) + 1
+    print(f"하루 3개 이상 발행한 날: { {d: n for d, n in sorted(by_day.items()) if n >= 3} }")
+    short = [(r[7], r[3]) for r in rows if r[3] < 2500]
+    print(f"본문 2500자 미만 글 {len(short)}개: {short}")
+    titles = [(r[7], r[9]) for r in rows]
+    dup_pairs = []
+    for i in range(len(titles)):
+        for j in range(i + 1, len(titles)):
+            if difflib.SequenceMatcher(None, titles[i][0].lower(), titles[j][0].lower()).ratio() >= 0.75:
+                dup_pairs.append((titles[i][0], titles[j][0]))
+    print(f"제목이 75% 이상 비슷한 쌍 {len(dup_pairs)}개: {dup_pairs}")
+
+    pages = _blogger_get(f"{base}/pages?fetchBodies=false", access_token).get("items", []) or []
+    print(f"\n=== 정적 페이지 {len(pages)}개 ===")
+    for pg in pages:
+        print(f"{pg.get('status')} | {pg.get('title')} | {pg.get('url')}")
+
+
 def _run_generation(
     prompt: str,
     fallback_title: str,
@@ -1633,6 +1711,11 @@ def _run_arm(label: str, fn) -> bool:
 
 
 def main() -> None:
+    if os.environ.get("RUN_BLOG_AUDIT") == "true":
+        # 읽기 전용 점검 모드: Claude API를 쓰지 않으므로 키 검사보다 먼저 처리한다.
+        audit_blog_posts()
+        return
+
     if not os.environ.get("ANTHROPIC_API_KEY"):
         sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
 
