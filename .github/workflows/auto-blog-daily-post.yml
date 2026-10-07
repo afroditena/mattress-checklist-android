@@ -4,11 +4,15 @@ name: Auto Blog Daily Post
 # 워크플로 파일 기준으로만 동작합니다. 이 워크플로가 main에 병합되기 전까지는
 # 자동으로 실행되지 않고, Actions 탭에서 수동 실행(workflow_dispatch)만 가능합니다.
 on:
-  schedule:
-    - cron: "0 22 * * *" # UTC 22:00 = 한국시간(KST) 오전 7시 (다음날) - new-maind(A/B/C/E) 전용, REST_WEEKDAYS(화/일)엔 스스로 건너뜀
-    - cron: "0 0 * * *"  # UTC 00:00 = KST 오전 9시 - simple-tech-fix(AI/테크 논평 T1/T2) #1
-    - cron: "0 3 * * *"  # UTC 03:00 = KST 낮 12시 - simple-tech-fix(AI/테크 논평 T1/T2) #2
-    - cron: "0 8 * * *"  # UTC 08:00 = KST 오후 5시 - simple-tech-fix(AI/테크 논평 T1/T2) #3
+  # 2026-10-07 자동 발행 일시중지 (사용자 요청 "발행 잠시 중지"). 아래 schedule을
+  # 꺼 둔 상태라 new-maind/simple-tech-fix 모두 자동으로는 글이 올라가지 않는다.
+  # 다시 켜려면 아래 schedule 5줄의 맨 앞 "# "만 지우면 된다(수동 실행
+  # workflow_dispatch는 일시중지 중에도 그대로 쓸 수 있다).
+  # schedule:
+  #   - cron: "0 22 * * *" # UTC 22:00 = 한국시간(KST) 오전 7시 (다음날) - new-maind(A/B/C/E) 전용, REST_WEEKDAYS(화/일)엔 스스로 건너뜀
+  #   - cron: "0 0 * * *"  # UTC 00:00 = KST 오전 9시 - simple-tech-fix(AI/테크 논평 T1/T2) #1
+  #   - cron: "0 3 * * *"  # UTC 03:00 = KST 낮 12시 - simple-tech-fix(AI/테크 논평 T1/T2) #2
+  #   - cron: "0 8 * * *"  # UTC 08:00 = KST 오후 5시 - simple-tech-fix(AI/테크 논평 T1/T2) #3
   workflow_dispatch:
     inputs:
       fix_known_post_title:
