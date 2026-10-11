@@ -4,18 +4,17 @@ name: Auto Blog Daily Post
 # 워크플로 파일 기준으로만 동작합니다. 이 워크플로가 main에 병합되기 전까지는
 # 자동으로 실행되지 않고, Actions 탭에서 수동 실행(workflow_dispatch)만 가능합니다.
 on:
-  # 2026-10-07 자동 발행 일시중지 (사용자 요청 "발행 잠시 중지"). 아래 schedule을
-  # 꺼 둔 상태라 new-maind/simple-tech-fix 모두 자동으로는 글이 올라가지 않는다.
-  # 다시 켜려면 아래 schedule 5줄의 맨 앞 "# "만 지우면 된다(수동 실행
-  # workflow_dispatch는 일시중지 중에도 그대로 쓸 수 있다).
-  # trends 갈래(구글 트렌드 -> Simple Tech Fix)용 cron은 아래 주석 맨 끝 두 줄이다.
-  # schedule:
+  # 2026-10-11 자동 발행 재개 (사용자 요청 "매일 하나의 주제로 하나씩"): 구글 트렌드(US)
+  # 검색량 1,000+ 항목 중 하나를 골라 Simple Tech Fix에 하루 한 편만 올린다.
+  # 한국시간 오전 9시 5분(UTC 00:05)에 한 번 돈다.
+  schedule:
+    - cron: "5 0 * * *" # UTC 00:05 = KST 오전 9시 5분 - trends(구글 트렌드 US -> Simple Tech Fix), 하루 1회
+  # 아래는 2026-10-07부터 계속 꺼 둔 이전 갈래들이다. 다시 켜려면 맨 앞 "# "를 지우고
+  # 위 schedule 목록에 옮겨 적으면 된다(RUN_ARMS 계산식이 이 cron 문자열로 갈래를 정한다).
   #   - cron: "0 22 * * *" # UTC 22:00 = 한국시간(KST) 오전 7시 (다음날) - new-maind(A/B/C/E) 전용, REST_WEEKDAYS(화/일)엔 스스로 건너뜀
   #   - cron: "0 0 * * *"  # UTC 00:00 = KST 오전 9시 - simple-tech-fix(AI/테크 논평 T1/T2) #1
   #   - cron: "0 3 * * *"  # UTC 03:00 = KST 낮 12시 - simple-tech-fix(AI/테크 논평 T1/T2) #2
   #   - cron: "0 8 * * *"  # UTC 08:00 = KST 오후 5시 - simple-tech-fix(AI/테크 논평 T1/T2) #3
-  #   - cron: "5 0 * * *"  # UTC 00:05 = KST 오전 9시 5분 - trends(구글 트렌드 US -> Simple Tech Fix) #1
-  #   - cron: "5 9 * * *"  # UTC 09:05 = KST 오후 6시 5분 - trends(구글 트렌드 US -> Simple Tech Fix) #2
   workflow_dispatch:
     inputs:
       fix_known_post_title:
