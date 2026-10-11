@@ -1603,6 +1603,108 @@ def audit_blog_posts() -> None:
         print(f"id={pg.get('id')} | {pg.get('title')} | {pg.get('url')} | {excerpt}")
 
 
+# 2026-10-11: 사용자 요청으로 구글 트렌드(미국) 급상승 검색어 중 검색량 1만+ 항목을
+# 골라 글을 쓰는 "trends" 갈래를 추가한다. 대상 블로그는 사용자가 지정한
+# Blogger 블로그 ID이며(비밀값이 아니라 대시보드 URL에 그대로 보이는 값),
+# 구글 트렌드 공식 RSS 피드를 쓴다(검색량은 approx_traffic 필드로 "10K+" 처럼 온다).
+TRENDS_FEED_URL = "https://trends.google.com/trending/rss?geo={geo}"
+TRENDS_BLOG_ID = "7123657698094793867"
+TRENDS_MIN_TRAFFIC = 10_000
+
+
+def parse_traffic(text: str) -> int:
+    """"10K+", "2M+", "20,000+" 같은 구글 트렌드 검색량 문구를 숫자로 바꾼다."""
+    m = re.match(r"\s*([\d.,]+)\s*([KkMm]?)", text or "")
+    if not m:
+        return 0
+    try:
+        num = float(m.group(1).replace(",", ""))
+    except ValueError:
+        return 0
+    return int(num * {"": 1, "k": 1_000, "m": 1_000_000}[m.group(2).lower()])
+
+
+def fetch_google_trends(geo: str = "US") -> list[dict]:
+    """구글 트렌드 RSS에서 급상승 검색어 목록을 읽는다. 각 항목: title, traffic_text,
+    traffic(숫자), pub_date, news[{title,url,source,snippet}]. 네임스페이스 접두어에
+    의존하지 않도록 태그의 local name으로 찾는다."""
+    import xml.etree.ElementTree as ET
+
+    req = urllib.request.Request(
+        TRENDS_FEED_URL.format(geo=geo),
+        headers={"User-Agent": "Mozilla/5.0 (compatible; auto-blog-autopilot)", "Accept": "application/rss+xml, text/xml"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        root = ET.fromstring(resp.read())
+
+    def local(tag: str) -> str:
+        return tag.rsplit("}", 1)[-1]
+
+    items = []
+    for item in root.iter("item"):
+        d: dict = {"news": []}
+        for child in item:
+            name = local(child.tag)
+            if name == "title":
+                d["title"] = (child.text or "").strip()
+            elif name == "approx_traffic":
+                d["traffic_text"] = (child.text or "").strip()
+            elif name == "pubDate":
+                d["pub_date"] = (child.text or "").strip()
+            elif name == "news_item":
+                n = {local(c.tag): (c.text or "").strip() for c in child}
+                d["news"].append(
+                    {
+                        "title": n.get("news_item_title", ""),
+                        "url": n.get("news_item_url", ""),
+                        "source": n.get("news_item_source", ""),
+                        "snippet": n.get("news_item_snippet", ""),
+                    }
+                )
+        d["traffic"] = parse_traffic(d.get("traffic_text", ""))
+        if d.get("title"):
+            items.append(d)
+    return items
+
+
+def trends_probe() -> None:
+    """읽기 전용 점검(RUN_TRENDS_PROBE=true): 러너에서 구글 트렌드 피드가 실제로
+    어떤 모양으로 오는지(검색량 필드 포함)와, 대상 블로그(TRENDS_BLOG_ID)가 어떤
+    블로그인지(이름/언어/기존 글)를 로그로만 확인한다. 아무것도 수정하지 않는다."""
+    try:
+        items = fetch_google_trends("US")
+    except Exception as e:
+        print(f"구글 트렌드 피드 읽기 실패: {type(e).__name__}: {e}")
+        items = []
+    print(f"구글 트렌드(US) 항목 {len(items)}개, 검색량 {TRENDS_MIN_TRAFFIC:,}+ : {sum(1 for i in items if i['traffic'] >= TRENDS_MIN_TRAFFIC)}개")
+    for i in items[:25]:
+        first = i["news"][0] if i["news"] else {}
+        print(
+            f"- {i.get('traffic_text', '?'):>7} ({i['traffic']:>9,}) | {i['title']} | {i.get('pub_date', '')} | "
+            f"뉴스 {len(i['news'])}건 | {first.get('source', '')}: {first.get('title', '')[:70]}"
+        )
+
+    if not blogger_configured():
+        print("Blogger 인증 정보가 없어 블로그 조회는 건너뜁니다.")
+        return
+    try:
+        token = get_google_access_token()
+        base = f"https://www.googleapis.com/blogger/v3/blogs/{TRENDS_BLOG_ID}"
+        info = _blogger_get(base, token)
+        print(
+            f"\n대상 블로그: {info.get('name')} | {info.get('url')} | locale={info.get('locale')} | "
+            f"글 {info.get('posts', {}).get('totalItems')}개 / 페이지 {info.get('pages', {}).get('totalItems')}개"
+        )
+        posts = _blogger_get(f"{base}/posts?maxResults=8&orderBy=published&status=live&fetchBodies=false", token).get("items", []) or []
+        for p in posts:
+            print(f"  최근 글: {p.get('published', '')[:10]} | {p.get('title')}")
+        pages = _blogger_get(f"{base}/pages?fetchBodies=false", token).get("items", []) or []
+        for pg in pages:
+            print(f"  페이지: {pg.get('title')} | {pg.get('url')}")
+    except urllib.error.HTTPError as e:
+        print(f"\n대상 블로그 조회 실패: {e.code} {e.reason}: {e.read().decode('utf-8', 'replace')[:300]}")
+
+
 def _run_generation(
     prompt: str,
     fallback_title: str,
@@ -1724,6 +1826,10 @@ def main() -> None:
     if os.environ.get("RUN_BLOG_AUDIT") == "true":
         # 읽기 전용 점검 모드: Claude API를 쓰지 않으므로 키 검사보다 먼저 처리한다.
         audit_blog_posts()
+        return
+
+    if os.environ.get("RUN_TRENDS_PROBE") == "true":
+        trends_probe()
         return
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
