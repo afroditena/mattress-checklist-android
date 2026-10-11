@@ -8,11 +8,14 @@ on:
   # 꺼 둔 상태라 new-maind/simple-tech-fix 모두 자동으로는 글이 올라가지 않는다.
   # 다시 켜려면 아래 schedule 5줄의 맨 앞 "# "만 지우면 된다(수동 실행
   # workflow_dispatch는 일시중지 중에도 그대로 쓸 수 있다).
+  # trends 갈래(구글 트렌드 -> Simple Tech Fix)용 cron은 아래 주석 맨 끝 두 줄이다.
   # schedule:
   #   - cron: "0 22 * * *" # UTC 22:00 = 한국시간(KST) 오전 7시 (다음날) - new-maind(A/B/C/E) 전용, REST_WEEKDAYS(화/일)엔 스스로 건너뜀
   #   - cron: "0 0 * * *"  # UTC 00:00 = KST 오전 9시 - simple-tech-fix(AI/테크 논평 T1/T2) #1
   #   - cron: "0 3 * * *"  # UTC 03:00 = KST 낮 12시 - simple-tech-fix(AI/테크 논평 T1/T2) #2
   #   - cron: "0 8 * * *"  # UTC 08:00 = KST 오후 5시 - simple-tech-fix(AI/테크 논평 T1/T2) #3
+  #   - cron: "5 0 * * *"  # UTC 00:05 = KST 오전 9시 5분 - trends(구글 트렌드 US -> Simple Tech Fix) #1
+  #   - cron: "5 9 * * *"  # UTC 09:05 = KST 오후 6시 5분 - trends(구글 트렌드 US -> Simple Tech Fix) #2
   workflow_dispatch:
     inputs:
       fix_known_post_title:
@@ -49,7 +52,9 @@ on:
         description: >-
           비워두면 이번 실행에서 일반 니치(new-maind)와 AI/테크 논평 전용
           일일(simple-tech-fix, T1/T2) 갈래를 둘 다 실행. "general"이면
-          new-maind 갈래만, "tech_fix"면 simple-tech-fix 갈래만 강제 지정 -
+          new-maind 갈래만, "tech_fix"면 simple-tech-fix 갈래만, "trends"면
+          구글 트렌드(US) 검색량 1,000+ 항목으로 Simple Tech Fix에 쓰는 갈래만
+          (비워두면 trends는 실행되지 않음) 강제 지정 -
           수동 검증용. 스케줄(cron) 실행은 이 값과 무관하게 어느 cron이
           켰는지로 자동 결정됨(아래 RUN_ARMS 계산 참고).
         required: false
@@ -97,6 +102,7 @@ jobs:
             ${{
               github.event.schedule == '0 22 * * *' && 'general'
               || (github.event.schedule == '0 0 * * *' || github.event.schedule == '0 3 * * *' || github.event.schedule == '0 8 * * *') && 'tech_fix'
+              || (github.event.schedule == '5 0 * * *' || github.event.schedule == '5 9 * * *') && 'trends'
               || github.event.inputs.run_arms
               || ''
             }}
@@ -126,6 +132,7 @@ jobs:
           # 훨씬 빨리 반복된다(실제로 중복 글이 발행돼서 분리했다).
           for f in docs/assets auto-blog-autopilot/data/used_topic_ids.json \
                    auto-blog-autopilot/data/used_topic_ids_second_blog.json \
+                   auto-blog-autopilot/data/used_topic_ids_trends.json \
                    auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json; do
             if [ -e "$f" ] || git cat-file -e "HEAD:$f" 2>/dev/null; then
               git add "$f"

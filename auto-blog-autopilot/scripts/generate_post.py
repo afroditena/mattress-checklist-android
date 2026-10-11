@@ -1322,6 +1322,7 @@ This blog is run by a single independent operator, as a focused companion to a b
 - Every fact cited (pricing, features, plan limits, search/market trend data) is checked against an official vendor page or a credible primary source (an official company blog, an analyst report, reputable tech reporting) before publishing - never an unverified blog post or a content-mill roundup.
 - The facts are verified, but the judgment is the blog's own - posts take a real position instead of hedging into "it depends."
 - Posts never claim hands-on testing that didn't happen; when a post is based on reading the documentation rather than real first-hand use, it says so plainly.
+- Some posts react to what is trending in US search that day. They are built from the news reporting behind the trend, checked against the sources listed in the post; they keep fact and opinion apart, end with the writer's own take, and skip stories centered on tragedy or violence.
 - Posts aim to be specific and opinionated rather than padded out to hit a word count.
 
 This blog currently carries no affiliate or referral links. See the [Privacy Policy]({privacy_url}) page for more detail.
@@ -1609,7 +1610,18 @@ def audit_blog_posts() -> None:
 # 구글 트렌드 공식 RSS 피드를 쓴다(검색량은 approx_traffic 필드로 "10K+" 처럼 온다).
 TRENDS_FEED_URL = "https://trends.google.com/trending/rss?geo={geo}"
 TRENDS_BLOG_ID = "7123657698094793867"
-TRENDS_MIN_TRAFFIC = 10_000
+# 사용자 요청은 1만+였지만 공식 RSS 피드는 최대 1,000+까지만 주는 것을 러너에서
+# 확인했고(2026-10-11, hours/category 파라미터도 무시됨), 사용자가 기준을 1,000+로
+# 낮추는 데 동의했다. TRENDS_MIN_TRAFFIC 환경변수로 바꿀 수 있다.
+TRENDS_MIN_TRAFFIC = int(os.environ.get("TRENDS_MIN_TRAFFIC", "1000"))
+TRENDS_USED_FILE = PROJECT_DIR / "data" / "used_topic_ids_trends.json"
+# 사망·총격·범죄 피해 등 비극성 사건은 "관점" 글로 쓰기에 부적절하고 애드센스
+# 민감 이벤트 정책에도 걸리기 쉬워서, 검색어/뉴스 제목에 이런 단어가 있으면 건너뛴다.
+TRENDS_BLOCKED_PATTERN = re.compile(
+    r"\b(shot|shooting|shooter|killed|killing|murder|murdered|homicide|dead|death|dies|died|dying|"
+    r"suicide|stabbed|stabbing|obituary|funeral|rape|assault|abuse|kidnap\w*|missing|victims?|crash(?:ed|es)?)\b",
+    re.IGNORECASE,
+)
 
 
 def parse_traffic(text: str) -> int:
@@ -1665,6 +1677,100 @@ def fetch_google_trends(geo: str = "US", extra_params: str = "", base_url: str =
         if d.get("title"):
             items.append(d)
     return items
+
+
+def select_trend_topic(items: list[dict] | None = None, used_file: Path | None = None) -> dict | None:
+    """구글 트렌드 항목 중 검색량 TRENDS_MIN_TRAFFIC 이상, 아직 안 쓴 것, 비극성이 아닌 것
+    가운데 검색량이 가장 큰 하나를 골라 파이프라인 공용 topic dict로 돌려준다.
+    없으면 None."""
+    if items is None:
+        items = fetch_google_trends("US")
+    used = set(load_used_topic_ids(used_file or TRENDS_USED_FILE))
+    candidates = []
+    for it in items:
+        if it["traffic"] < TRENDS_MIN_TRAFFIC:
+            continue
+        topic_id = slugify(it["title"])
+        if not topic_id or topic_id in used:
+            continue
+        text = it["title"] + " " + " ".join(n.get("title", "") for n in it["news"])
+        if TRENDS_BLOCKED_PATTERN.search(text):
+            print(f"비극성 사건 가능성으로 건너뜀: {it['title']}")
+            continue
+        candidates.append((it["traffic"], topic_id, it))
+    if not candidates:
+        return None
+    _, topic_id, it = max(candidates, key=lambda c: c[0])
+    return {
+        "id": topic_id,
+        "cluster_name": "Trending Now (Google Trends US)",
+        "keyword": it["title"],
+        "format": "trend_take",
+        "trend": it,
+    }
+
+
+OUTPUT_FORMAT_BLOCK_TRENDS = """Output format (follow exactly):
+TITLE: (a specific, plain-English title, under 70 characters, no clickbait, no claim the sources don't support)
+TAGS: (3-5 comma-separated tags)
+KEYWORD: (the trending search term)
+SOURCES: (2-4 reputable news or primary-source URLs you actually used, separated by " | ")
+---
+(the post body in Markdown, following the structure above)"""
+
+
+def build_trend_take_prompt(topic: dict, recent_titles: list[str]) -> str:
+    """Trend Take 포맷(trends 갈래, Simple Tech Fix): 구글 트렌드(US)에서 막 뜬 검색어를 사실
+    확인된 내용 위주로 정리하고, 글의 맨 마지막 섹션을 필자의 생각/관점("My Take")으로 끝낸다
+    (사용자 요청). 뉴스를 그대로 옮기지 않고 출처를 밝히며, 직접 겪은 척하지 않는 정직성 규칙은
+    simple-tech-fix 글쓰기 지침과 같다."""
+    trend = topic["trend"]
+    news_lines = "\n".join(
+        f"- [{n.get('source', '?')}] {n.get('title', '')} ({n.get('url', '')})" + (f"\n  snippet: {n['snippet']}" if n.get("snippet") else "")
+        for n in trend["news"]
+    ) or "- (no news items attached)"
+    return f"""You are writing for Simple Tech Fix, an English-language blog for a US audience. Today's post reacts to something that is trending in US Google Search right now, explains it clearly, and ends with the writer's own considered perspective.
+
+Trending search term: "{trend['title']}"
+Approximate search volume: {trend.get('traffic_text', 'unknown')}
+First seen trending: {trend.get('pub_date', 'unknown')}
+News items Google attached to this trend (leads only - verify them, don't just repeat them):
+{news_lines}
+{_niche_avoid_block(recent_titles)}
+## Research and sourcing
+
+Use web search to find out what is actually going on, preferring primary sources and established news outlets over aggregators. Treat the items above as leads, not as facts. Never invent a name, number, date, quote, or event. If you can't confirm something, say so in the post. Paraphrase in your own words; if you quote, keep it to one short line per source.
+
+## If the story is a tragedy
+
+If your research shows the story centers on a death, violent crime, serious accident with victims, a minor, or a private individual's personal troubles, do not write the post. Output exactly this single line and nothing else: SKIP - <one-sentence reason>
+
+## Structure (about 700-1000 words, vary paragraph lengths)
+
+1. A specific title and a first paragraph that says what is happening in plain terms, with the date.
+2. ## What's Happening - the verified facts, each attributed ("according to <outlet>"), in short paragraphs or a short list.
+3. ## Why People Are Searching For It - the reason the term spiked, and who is looking.
+4. ## What We Know and What We Don't - separate confirmed facts from open questions, rumors, and anything still developing.
+5. ## Sources - a bulleted list of the links you actually used.
+6. ## My Take - the LAST section of the post. Your own perspective in 3-5 short paragraphs.
+
+## How to write "My Take"
+
+- Say clearly that this is opinion ("I think", "My read") and give the reason behind each opinion.
+- Make it a concrete judgment about what this means or what a reasonable reader should do or watch for - never a vague "there are pros and cons" ending.
+- Concede one fair point from the other side.
+- Do not speculate about anyone's private life, health, motives, guilt, or legal exposure. For legal, medical, or financial angles, say plainly that you are not a professional.
+- End on the take itself. No sign-off, no call to action, no summary of what you just said.
+
+## Honesty and style rules
+
+- Never claim firsthand experience or testing you did not do ("I tested this", "in my experience").
+- Avoid stock phrases: "In today's fast-paced world", "It's important to note", "Let's dive in", "game-changer", "unlock", "seamlessly", "In conclusion".
+- Vary sentence length; be concrete; keep paragraphs to 1-4 sentences.
+- Do not add images or image links.
+
+{OUTPUT_FORMAT_BLOCK_TRENDS}
+"""
 
 
 def trends_probe() -> None:
@@ -1724,6 +1830,8 @@ def _run_generation(
     niche_topic: dict | None = None,
     blog_id: str | None = None,
     used_ids_file: Path | None = None,
+    image_mode: str = "screenshots",
+    skip_marker: str | None = None,
 ) -> None:
     """프롬프트 하나로 글 하나를 생성해서 GitHub Pages(docs/_posts, 항상
     전체 클러스터를 보관하는 단일 아카이브)에 저장하고 Blogger에도 발행한다.
@@ -1745,6 +1853,14 @@ def _run_generation(
     감싸서 격리한다."""
     raw_output = call_claude(prompt, enable_web_search=not manual)
 
+    # 모델이 "이 주제는 쓰지 않겠다"고 SKIP으로 답한 경우(trends 갈래의 비극성 사건 등):
+    # 발행 없이 끝내되, 같은 주제를 다음 회차에 또 고르지 않도록 사용 기록은 남긴다.
+    if skip_marker and raw_output.lstrip().upper().startswith(skip_marker):
+        print(f"모델이 이 주제를 쓰지 않기로 했습니다 - 발행 없이 건너뜁니다: {raw_output.strip()[:200]}")
+        if niche_topic:
+            save_used_topic_id(niche_topic["id"], used_ids_file)
+        return
+
     if manual:
         title, tags, keyword, image_query, body = parse_output(raw_output, fallback_title=fallback_title)
         sources = []
@@ -1763,6 +1879,10 @@ def _run_generation(
     elif manual:
         photo = find_stock_photo(image_query or keyword or fallback_title)
         body = build_image_block(photo) + body
+    elif image_mode == "none":
+        # 뉴스 기사 페이지를 캡처해 싣는 것은 저작권상 부적절하고, 사람 이름 같은 검색어에
+        # 무관한 스톡사진을 붙이는 것도 부적절해서 이미지 없이 발행한다(trends 갈래).
+        pass
     else:
         # 새 니치: SOURCES로 받은 공식 페이지들을 직접 캡처해서 실제 화면
         # 스크린샷으로 쓴다("직접 제작/캡처/AI생성/명확한 라이선스만" 원칙 -
@@ -1868,6 +1988,7 @@ def main() -> None:
     run_arms = os.environ.get("RUN_ARMS", "").strip().lower()
     run_general = run_arms in ("", "general")
     run_tech_fix = run_arms in ("", "tech_fix")
+    run_trends = run_arms == "trends"
 
     results: list[tuple[str, bool]] = []
 
@@ -1931,7 +2052,31 @@ def main() -> None:
 
         results.append(("daily(simple-tech-fix)", _run_arm("daily(simple-tech-fix)", _run_daily_tech_fix)))
 
-    sync_blogger_static_pages()
+    if run_trends:
+        # 구글 트렌드(US) 검색량 TRENDS_MIN_TRAFFIC+ 항목으로 Simple Tech Fix(TRENDS_BLOG_ID)에
+        # 글 하나를 낸다. 조건에 맞는 항목이 없으면 실패가 아니라 조용히 건너뛴다.
+        def _run_trends():
+            topic = select_trend_topic()
+            if not topic:
+                print(f"검색량 {TRENDS_MIN_TRAFFIC:,}+ 이면서 아직 안 쓴 비극성이 아닌 구글 트렌드 항목이 없어 이번 회차는 건너뜁니다.")
+                return
+            print(f"오늘의 트렌드: {topic['keyword']} ({topic['trend'].get('traffic_text')})")
+            recent_titles = get_recent_titles()
+            prompt = build_trend_take_prompt(topic, recent_titles)
+            _run_generation(
+                prompt,
+                topic["keyword"],
+                niche_topic=topic,
+                blog_id=TRENDS_BLOG_ID,
+                used_ids_file=TRENDS_USED_FILE,
+                image_mode="none",
+                skip_marker="SKIP",
+            )
+
+        results.append(("trends(simple-tech-fix)", _run_arm("trends(simple-tech-fix)", _run_trends)))
+
+    if not run_trends:
+        sync_blogger_static_pages()
     sync_second_blogger_static_pages()
 
     if results and not any(ok for _, ok in results):
