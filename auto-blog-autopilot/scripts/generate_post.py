@@ -1624,14 +1624,14 @@ def parse_traffic(text: str) -> int:
     return int(num * {"": 1, "k": 1_000, "m": 1_000_000}[m.group(2).lower()])
 
 
-def fetch_google_trends(geo: str = "US") -> list[dict]:
+def fetch_google_trends(geo: str = "US", extra_params: str = "", base_url: str = TRENDS_FEED_URL) -> list[dict]:
     """구글 트렌드 RSS에서 급상승 검색어 목록을 읽는다. 각 항목: title, traffic_text,
     traffic(숫자), pub_date, news[{title,url,source,snippet}]. 네임스페이스 접두어에
     의존하지 않도록 태그의 local name으로 찾는다."""
     import xml.etree.ElementTree as ET
 
     req = urllib.request.Request(
-        TRENDS_FEED_URL.format(geo=geo),
+        base_url.format(geo=geo) + extra_params,
         headers={"User-Agent": "Mozilla/5.0 (compatible; auto-blog-autopilot)", "Accept": "application/rss+xml, text/xml"},
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -1671,18 +1671,29 @@ def trends_probe() -> None:
     """읽기 전용 점검(RUN_TRENDS_PROBE=true): 러너에서 구글 트렌드 피드가 실제로
     어떤 모양으로 오는지(검색량 필드 포함)와, 대상 블로그(TRENDS_BLOG_ID)가 어떤
     블로그인지(이름/언어/기존 글)를 로그로만 확인한다. 아무것도 수정하지 않는다."""
-    try:
-        items = fetch_google_trends("US")
-    except Exception as e:
-        print(f"구글 트렌드 피드 읽기 실패: {type(e).__name__}: {e}")
-        items = []
-    print(f"구글 트렌드(US) 항목 {len(items)}개, 검색량 {TRENDS_MIN_TRAFFIC:,}+ : {sum(1 for i in items if i['traffic'] >= TRENDS_MIN_TRAFFIC)}개")
-    for i in items[:25]:
+    variants = [
+        ("기본", TRENDS_FEED_URL, ""),
+        ("hours=24", TRENDS_FEED_URL, "&hours=24"),
+        ("hours=48", TRENDS_FEED_URL, "&hours=48"),
+        ("hours=168", TRENDS_FEED_URL, "&hours=168"),
+        ("category=18(Technology)", TRENDS_FEED_URL, "&category=18"),
+        ("co.kr 도메인 hours=24", "https://trends.google.co.kr/trending/rss?geo={geo}", "&hours=24"),
+    ]
+    items = []
+    for label, base, extra in variants:
+        try:
+            got = fetch_google_trends("US", extra, base)
+        except Exception as e:
+            print(f"[{label}] 읽기 실패: {type(e).__name__}: {e}")
+            continue
+        big = sum(1 for i in got if i["traffic"] >= TRENDS_MIN_TRAFFIC)
+        mx = max((i["traffic"] for i in got), default=0)
+        print(f"[{label}] 항목 {len(got)}개, 최대 검색량 {mx:,}, {TRENDS_MIN_TRAFFIC:,}+ : {big}개")
+        if not items or len(got) > len(items):
+            items = got
+    for i in sorted(items, key=lambda x: -x["traffic"])[:15]:
         first = i["news"][0] if i["news"] else {}
-        print(
-            f"- {i.get('traffic_text', '?'):>7} ({i['traffic']:>9,}) | {i['title']} | {i.get('pub_date', '')} | "
-            f"뉴스 {len(i['news'])}건 | {first.get('source', '')}: {first.get('title', '')[:70]}"
-        )
+        print(f"- {i.get('traffic_text', '?'):>7} | {i['title']} | 뉴스 {len(i['news'])}건 | {first.get('source', '')}: {first.get('title', '')[:60]}")
 
     if not blogger_configured():
         print("Blogger 인증 정보가 없어 블로그 조회는 건너뜁니다.")
