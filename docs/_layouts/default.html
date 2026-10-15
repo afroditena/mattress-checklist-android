@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if page.title %}{{ page.title }} · {% endif %}{{ site.title }}</title>
   <meta name="description" content="{{ page.description | default: site.description }}">
+  <!-- 이 사이트는 Blogger(new-maind/simple-tech-fix)와 같은 글을 보관하는 아카이브 미러다.
+       같은 본문이 두 도메인에 색인되면 중복 콘텐츠로 보이므로 검색 색인에서 뺀다. -->
+  <meta name="robots" content="noindex, nofollow">
   {% feed_meta %}
   {% include head-custom.html %}
   {% if site.google_analytics %}

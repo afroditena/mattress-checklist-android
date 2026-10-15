@@ -1679,6 +1679,37 @@ def fetch_google_trends(geo: str = "US", extra_params: str = "", base_url: str =
     return items
 
 
+# 2026-10-15 애드센스 "가치가 별로 없는 콘텐츠" 대응: 분석할 거리가 없어 얇은 글이 되기 쉬운 검색어
+# (경기 일정/스코어/중계, "near me", 날씨, 로또·퍼즐 힌트 등)와 영어 블로그에 맞지 않는 비라틴 문자
+# 검색어(실제로 "李嘉诚"이 뽑혔다)는 후보에서 뺀다. 카테고리 자체를 좁힌 것은 아니다.
+TRENDS_LOW_VALUE_PATTERN = re.compile(
+    r"\b(scores?|box score|live ?stream|livestream|lineups?|line-up|starting xi|injury (?:report|update)|"
+    r"kick-?off|odds|spread|predictions?|fantasy|highlights|fixtures?|standings|playing today|near me|"
+    r"horoscope|weather|lottery|powerball|mega millions|wordle|connections hints?|"
+    r"premier league|la liga|serie a|bundesliga|champions league|nfl|nba|mlb|nhl|ufc|mls)\b",
+    re.IGNORECASE,
+)
+TRENDS_MIN_DISTINCT_SOURCES = 2
+
+
+def _has_non_latin_letters(text: str) -> bool:
+    return any(ch.isalpha() and ord(ch) > 0x024F for ch in text)
+
+
+def _too_similar_to_used(topic_id: str, used: set[str]) -> bool:
+    """이미 쓴 주제와 사실상 같은 주제(예: "real betis - osasuna" / "betis vs osasuna")인지."""
+    import difflib
+
+    tokens = set(topic_id.split("-"))
+    for u in used:
+        if difflib.SequenceMatcher(None, topic_id, u).ratio() >= 0.8:
+            return True
+        ut = set(u.split("-"))
+        if tokens and ut and len(tokens & ut) / len(tokens | ut) >= 0.6:
+            return True
+    return False
+
+
 def select_trend_topic(items: list[dict] | None = None, used_file: Path | None = None) -> dict | None:
     """구글 트렌드 항목 중 검색량 TRENDS_MIN_TRAFFIC 이상, 아직 안 쓴 것, 비극성이 아닌 것
     가운데 검색량이 가장 큰 하나를 골라 파이프라인 공용 topic dict로 돌려준다.
@@ -1691,11 +1722,20 @@ def select_trend_topic(items: list[dict] | None = None, used_file: Path | None =
         if it["traffic"] < TRENDS_MIN_TRAFFIC:
             continue
         topic_id = slugify(it["title"])
-        if not topic_id or topic_id in used:
+        if not topic_id or topic_id in used or _too_similar_to_used(topic_id, used):
+            continue
+        if _has_non_latin_letters(it["title"]):
+            print(f"영어 블로그에 맞지 않는 비라틴 문자 검색어라 건너뜀: {it['title']}")
             continue
         text = it["title"] + " " + " ".join(n.get("title", "") for n in it["news"])
         if TRENDS_BLOCKED_PATTERN.search(text):
             print(f"비극성 사건 가능성으로 건너뜀: {it['title']}")
+            continue
+        if TRENDS_LOW_VALUE_PATTERN.search(text):
+            print(f"분석할 거리가 얇은 주제(경기/스코어/지역 정보 등)라 건너뜀: {it['title']}")
+            continue
+        if len({n.get("source", "") for n in it["news"] if n.get("source")}) < TRENDS_MIN_DISTINCT_SOURCES:
+            print(f"서로 다른 출처가 {TRENDS_MIN_DISTINCT_SOURCES}곳 미만이라 건너뜀: {it['title']}")
             continue
         candidates.append((it["traffic"], topic_id, it))
     if not candidates:
@@ -1717,6 +1757,26 @@ KEYWORD: (the trending search term)
 SOURCES: (2-4 reputable news or primary-source URLs you actually used, separated by " | ")
 ---
 (the post body in Markdown, following the structure above)"""
+
+
+TRENDS_MIN_WORDS = 700
+
+
+def check_trend_post(body: str) -> str | None:
+    """trends 글 발행 전 검사. 문제가 있으면 이유 문자열, 없으면 None."""
+    words = len(re.findall(r"\b[\w'’-]+\b", re.sub(r"\(https?://[^)]+\)|https?://\S+", " ", body)))
+    if words < TRENDS_MIN_WORDS:
+        return f"본문이 너무 짧음({words}단어 < {TRENDS_MIN_WORDS})"
+    headings = re.findall(r"^##\s+(.+?)\s*$", body, re.MULTILINE)
+    if not headings or headings[-1].strip().lower() != "my take":
+        return "마지막 섹션이 'My Take'가 아님"
+    if "sources" not in [h.strip().lower() for h in headings]:
+        return "Sources 섹션이 없음"
+    if len(set(re.findall(r"https?://([^/\s)]+)", body))) < 2:
+        return "서로 다른 출처 도메인이 2곳 미만"
+    if "![" in body:
+        return "이미지가 포함됨"
+    return None
 
 
 def build_trend_take_prompt(topic: dict, recent_titles: list[str]) -> str:
@@ -1745,14 +1805,17 @@ Use web search to find out what is actually going on, preferring primary sources
 
 If your research shows the story centers on a death, violent crime, serious accident with victims, a minor, or a private individual's personal troubles, do not write the post. Output exactly this single line and nothing else: SKIP - <one-sentence reason>
 
-## Structure (about 700-1000 words, vary paragraph lengths)
+## Structure (900-1300 words, vary paragraph lengths)
+
+This post must add something a reader cannot get from the headline alone. Do not just restate the news. Use at least two independent sources, and include real background: how we got here, a short timeline, relevant numbers (each attributed), or how this compares with similar past events.
 
 1. A specific title and a first paragraph that says what is happening in plain terms, with the date.
 2. ## What's Happening - the verified facts, each attributed ("according to <outlet>"), in short paragraphs or a short list.
 3. ## Why People Are Searching For It - the reason the term spiked, and who is looking.
-4. ## What We Know and What We Don't - separate confirmed facts from open questions, rumors, and anything still developing.
-5. ## Sources - a bulleted list of the links you actually used.
-6. ## My Take - the LAST section of the post. Your own perspective in 3-5 short paragraphs.
+4. ## The Context Most Coverage Skips - background, timeline, or comparison that helps a reader understand the story (this is your original analysis; at least 150 words).
+5. ## What We Know and What We Don't - separate confirmed facts from open questions, rumors, and anything still developing.
+6. ## Sources - a bulleted list of the links you actually used (at least two different outlets).
+7. ## My Take - the LAST section of the post. Your own perspective in 3-5 short paragraphs.
 
 ## How to write "My Take"
 
@@ -1832,6 +1895,7 @@ def _run_generation(
     used_ids_file: Path | None = None,
     image_mode: str = "screenshots",
     skip_marker: str | None = None,
+    body_check=None,
 ) -> None:
     """프롬프트 하나로 글 하나를 생성해서 GitHub Pages(docs/_posts, 항상
     전체 클러스터를 보관하는 단일 아카이브)에 저장하고 Blogger에도 발행한다.
@@ -1866,6 +1930,15 @@ def _run_generation(
         sources = []
     else:
         title, tags, keyword, sources, body = parse_niche_output(raw_output, fallback_title=fallback_title)
+
+    # 발행 직전 품질 검사(trends 갈래): 얇거나 구조가 깨진 글은 올리지 않는다.
+    if body_check:
+        problem = body_check(body)
+        if problem:
+            print(f"품질 검사 불합격이라 발행하지 않습니다: {problem} (제목: {title})")
+            if niche_topic:
+                save_used_topic_id(niche_topic["id"], used_ids_file)
+            return
 
     today = datetime.date.today()
     slug = slugify(title)
@@ -2071,6 +2144,7 @@ def main() -> None:
                 used_ids_file=TRENDS_USED_FILE,
                 image_mode="none",
                 skip_marker="SKIP",
+                body_check=check_trend_post,
             )
 
         results.append(("trends(simple-tech-fix)", _run_arm("trends(simple-tech-fix)", _run_trends)))
