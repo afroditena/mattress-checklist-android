@@ -1,3 +1,13 @@
+*.iml
+.idea/
+.gradle/
+/build/
+/app/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+
 # Python (auto-blog-autopilot)
 auto-blog-autopilot/**/__pycache__/
 *.pyc
