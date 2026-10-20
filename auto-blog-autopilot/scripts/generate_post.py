@@ -1810,7 +1810,12 @@ def _too_similar_to_used(topic_id: str, used: set[str]) -> bool:
 
 
 def select_trend_topic(
-    items: list[dict] | None = None, used_file: Path | None = None, lang: str = "en", geo: str = "US", require_tech: bool = True
+    items: list[dict] | None = None,
+    used_file: Path | None = None,
+    lang: str = "en",
+    geo: str = "US",
+    require_tech: bool = True,
+    relevance_picker=None,
 ) -> dict | None:
     """구글 트렌드 항목 중 검색량 TRENDS_MIN_TRAFFIC 이상, 아직 안 쓴 것, 비극성이 아닌 것
     가운데 검색량이 가장 큰 하나를 골라 파이프라인 공용 topic dict로 돌려준다.
@@ -1819,6 +1824,7 @@ def select_trend_topic(
         items = fetch_google_trends(geo)
     used = set(load_used_topic_ids(used_file or (TRENDS_KR_USED_FILE if lang == "ko" else TRENDS_USED_FILE)))
     candidates = []
+    offtopic = []
     for it in items:
         if it["traffic"] < TRENDS_MIN_TRAFFIC:
             continue
@@ -1832,16 +1838,28 @@ def select_trend_topic(
         if TRENDS_BLOCKED_PATTERN.search(text) or TRENDS_BLOCKED_PATTERN_KO.search(text):
             print(f"비극성 사건 가능성으로 건너뜀: {it['title']}")
             continue
-        if require_tech and not TRENDS_TECH_PATTERN.search(text):
-            print(f"블로그 주제(IT·AI·테크)와 무관해 건너뜀: {it['title']}")
-            continue
+        keyword_fit = bool(TRENDS_TECH_PATTERN.search(text))
         if TRENDS_LOW_VALUE_PATTERN.search(text) or TRENDS_LOW_VALUE_PATTERN_KO.search(text):
             print(f"분석할 거리가 얇은 주제(경기/스코어/지역 정보 등)라 건너뜀: {it['title']}")
             continue
         if len({n.get("source", "") for n in it["news"] if n.get("source")}) < TRENDS_MIN_DISTINCT_SOURCES:
             print(f"서로 다른 출처가 {TRENDS_MIN_DISTINCT_SOURCES}곳 미만이라 건너뜀: {it['title']}")
             continue
+        if require_tech and not keyword_fit:
+            offtopic.append((it["traffic"], topic_id, it))
+            continue
         candidates.append((it["traffic"], topic_id, it))
+    if not candidates and offtopic and relevance_picker:
+        # 키워드로는 못 찾았지만 IT·AI와 실제로 연결되는 항목(예: 소프트웨어 회사 이름)이 있을 수 있어
+        # 검색량 상위 몇 개만 모델에게 보여 주고 고르게 한다. 연결되는 게 없으면 None.
+        top = sorted(offtopic, key=lambda c: -c[0])[:6]
+        idx = relevance_picker([c[2] for c in top])
+        if idx is not None and 0 <= idx < len(top):
+            candidates.append(top[idx])
+        else:
+            print("모델 판정: 블로그 주제와 연결되는 항목이 없어 건너뜁니다: " + ", ".join(c[2]["title"] for c in top))
+    elif offtopic and not candidates:
+        print("블로그 주제(IT·AI·테크)와 무관해 건너뜀: " + ", ".join(c[2]["title"] for c in offtopic))
     if not candidates:
         return None
     _, topic_id, it = max(candidates, key=lambda c: c[0])
@@ -1852,6 +1870,36 @@ def select_trend_topic(
         "format": "trend_take",
         "trend": it,
     }
+
+
+def make_relevance_picker(lang: str = "en"):
+    """트렌드 항목들 중 블로그 주제(IT·AI·테크)와 실제로 연결되는 하나의 인덱스를 모델에게 고르게 하는
+    함수를 돌려준다(없으면 None). 웹 검색 없이 짧은 호출 한 번이라 비용이 작다."""
+    topic = (
+        "technology, AI, software, internet services and platforms, consumer electronics, tech companies, cybersecurity or digital policy"
+        if lang == "en"
+        else "IT, AI, 소프트웨어, 인터넷 서비스·플랫폼, 전자기기, 기술 기업, 보안, 디지털 정책"
+    )
+
+    def picker(items: list[dict]):
+        lines = []
+        for i, it in enumerate(items, start=1):
+            heads = " | ".join(n.get("title", "") for n in it["news"][:2])
+            lines.append(f"{i}. {it['title']} - {heads}")
+        prompt = (
+            f"Below are Google Trends search terms with their top headlines. Pick the ONE term that has the clearest, real connection to "
+            f"{topic}, so that a blog post about it could teach readers something useful in that area. "
+            f"If none has a real connection, answer NONE. Do not stretch: a celebrity, politician, sports or weather item is NONE.\n\n"
+            + "\n".join(lines)
+            + "\n\nAnswer with only the number, or NONE."
+        )
+        answer = call_claude(prompt, enable_web_search=False).strip()
+        if answer.upper().startswith("NONE"):
+            return None
+        m = re.search(r"\d+", answer)
+        return int(m.group()) - 1 if m else None
+
+    return picker
 
 
 OUTPUT_FORMAT_BLOCK_TRENDS = """Output format (follow exactly):
@@ -2314,7 +2362,7 @@ def main() -> None:
         # 구글 트렌드(US) 검색량 TRENDS_MIN_TRAFFIC+ 항목으로 Simple Tech Fix(TRENDS_BLOG_ID)에
         # 글 하나를 낸다. 조건에 맞는 항목이 없으면 실패가 아니라 조용히 건너뛴다.
         def _run_trends():
-            topic = select_trend_topic()
+            topic = select_trend_topic(relevance_picker=make_relevance_picker("en"))
             if not topic:
                 print(f"검색량 {TRENDS_MIN_TRAFFIC:,}+ 이면서 아직 안 쓴 비극성이 아닌 구글 트렌드 항목이 없어 이번 회차는 건너뜁니다.")
                 return
@@ -2337,7 +2385,7 @@ def main() -> None:
     if run_trends_kr:
         # 구글 트렌드(KR) 중 IT·AI 관련 항목으로 new-maind(BLOGGER_BLOG_ID)에 한국어 글 한 편.
         def _run_trends_kr():
-            topic = select_trend_topic(lang="ko", geo="KR", used_file=TRENDS_KR_USED_FILE)
+            topic = select_trend_topic(lang="ko", geo="KR", used_file=TRENDS_KR_USED_FILE, relevance_picker=make_relevance_picker("ko"))
             if not topic:
                 print(f"검색량 {TRENDS_MIN_TRAFFIC:,}+ 이면서 안 쓴 IT·AI 관련 한국 구글 트렌드 항목이 없어 이번 회차는 건너뜁니다.")
                 return
