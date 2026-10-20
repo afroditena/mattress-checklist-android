@@ -631,6 +631,21 @@ SOURCES: (실제로 참고하고 인용한 공식 URL 2~4개, " | "로 구분 - 
 (위 구조를 따르는 마크다운 본문 - 한국어)"""
 
 
+# 2026-10-20: 사용자가 /rewrite-like-human 스킬 지침을 글쓰기 지침으로 저장해달라고 요청했다.
+# 스킬의 규칙(수식어 대신 구체적 사실, 주어·목적어 생략, 번역투 제거, 숫자와 사실 위주,
+# 문장 길이 변주, 상투 표현 금지)을 한국어 글을 쓰는 세 프롬프트(how_to/alternative/comparison)
+# 끝에 그대로 붙인다.
+HUMAN_STYLE_BLOCK_KO = """글쓰기 방식(정보를 나열한 글이 아니라, 한 사람이 자기 생각을 정리해서 건네는 글처럼):
+1. 수식어를 쓰지 않는다. 꾸미는 말 대신 구체적인 사실(가격, 날짜, 메뉴 이름, 숫자)을 넣는다.
+2. 문맥으로 아는 주어와 반복되는 목적어는 생략한다.
+3. 번역투를 걷어낸다. 그/그녀/그것 같은 대명사 직역, 명사 앞에 길게 붙는 관계절, "-에서의·-에로의" 같은 이중 조사를 피한다.
+4. 형용사·부사 대신 구체적인 숫자와 사실로 쓴다.
+5. 문장 길이를 일부러 다르게 한다. 짧게 치는 문장과 긴 문장을 섞는다.
+쓰지 말 것: "이유는 단순하다", "결론적으로", "핵심은 다음과 같다", "중요한 것은", "~라고 할 수 있습니다", "~하는 것이 중요합니다", "혁신적인", "소중한", "함께하는".
+감탄사나 말줄임표를 억지로 넣지 않는다. 말줄임표는 사람이 실제로 잠깐 멈출 법한 자리에만 쓴다.
+깔끔하되 너무 매끈하면 안 된다."""
+
+
 def _niche_avoid_block(recent_titles: list[str]) -> str:
     if not recent_titles:
         return ""
@@ -670,6 +685,8 @@ def build_how_to_prompt(topic: dict, recent_titles: list[str]) -> str:
 톤: 자연스러운 한국어 블로그 구어체 - 번역투 금지, 친한 지인이 알려주는
 느낌으로. 과장이나 근거 없는 효과·수익 약속 금지.
 
+{HUMAN_STYLE_BLOCK_KO}
+
 {OUTPUT_FORMAT_BLOCK_KO}
 """
 
@@ -705,6 +722,8 @@ SOURCES에는 반드시 각 도구의 공식 요금제 페이지를 인용하세
 
 톤: 자연스러운 한국어 블로그 구어체 - 번역투 금지. 과장·근거 없는 주장
 금지.
+
+{HUMAN_STYLE_BLOCK_KO}
 
 {OUTPUT_FORMAT_BLOCK_KO}
 """
@@ -849,6 +868,8 @@ SOURCES에는 두 회사 각각의 공식 요금제/스펙 페이지를 인용�
 
 톤: 자연스러운 한국어 블로그 구어체, 양쪽에 공정하되 결론은 분명하게.
 과장 금지.
+
+{HUMAN_STYLE_BLOCK_KO}
 
 {OUTPUT_FORMAT_BLOCK_KO}
 """
@@ -1876,7 +1897,10 @@ This post must add something a reader cannot get from the headline alone. Do not
 
 - Never claim firsthand experience or testing you did not do ("I tested this", "in my experience").
 - Avoid stock phrases: "In today's fast-paced world", "It's important to note", "Let's dive in", "game-changer", "unlock", "seamlessly", "In conclusion".
-- Vary sentence length; be concrete; keep paragraphs to 1-4 sentences.
+- Vary sentence length on purpose: mix short, punchy sentences with long ones. Keep paragraphs to 1-4 sentences.
+- Replace modifiers with concrete facts and numbers. Drop subjects and repeated objects that context already supplies.
+- Never use: "The reason is simple", "In conclusion", "The key point is", "What matters most is", "It can be said that", "innovative", "meaningful", "together". Do not force exclamations or ellipses.
+- Write like one person organizing their own thinking and handing it over: tidy, but not too smooth.
 - Do not add images or image links.
 
 {OUTPUT_FORMAT_BLOCK_TRENDS}
