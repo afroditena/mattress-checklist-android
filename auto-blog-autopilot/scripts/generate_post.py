@@ -501,10 +501,27 @@ def call_claude(prompt: str, enable_web_search: bool = False) -> str:
     if response.stop_reason == "refusal":
         sys.exit("Claude가 이 요청을 거절했습니다 (stop_reason=refusal). 주제를 확인해 주세요.")
 
-    text_parts = [block.text for block in response.content if block.type == "text"]
-    if not text_parts:
+    # 응답이 도중에 끊긴 채 발행되면 글이 영구히 잘린 상태로 남는다(max_tokens), 서버 도구
+    # 턴이 중간에 멈춘 응답(pause_turn)도 마찬가지라서 발행하지 않고 이번 회차를 건너뛴다.
+    if response.stop_reason in ("max_tokens", "pause_turn"):
+        sys.exit(f"응답이 완성되지 않아 발행하지 않습니다 (stop_reason={response.stop_reason}).")
+
+    # 웹 검색을 켜면 인용 지점마다 텍스트가 여러 블록으로 쪼개져 온다. 블록 사이에 줄바꿈을
+    # 넣으면 문장/표/목록이 중간에서 끊기므로(실제로 발행된 글에 나타남), 연속된 텍스트 블록은
+    # 그대로 이어붙이고, 검색 도구 호출로 갈라진 덩어리 사이만 빈 줄로 나눈다.
+    groups: list[list[str]] = []
+    prev_was_text = False
+    for block in response.content:
+        if block.type == "text":
+            if not prev_was_text:
+                groups.append([])
+            groups[-1].append(block.text)
+            prev_was_text = True
+        else:
+            prev_was_text = False
+    if not groups:
         sys.exit("응답에 텍스트 콘텐츠가 없습니다.")
-    return "\n".join(text_parts)
+    return "\n\n".join("".join(g) for g in groups)
 
 
 def _find_field_match(text: str, label: str) -> re.Match | None:
@@ -564,7 +581,7 @@ def parse_niche_output(text: str, fallback_title: str = "") -> tuple[str, str, s
     tags = _find_field(text, "TAGS")
     keyword = _find_field(text, "KEYWORD")
     sources_raw = _find_field(text, "SOURCES")
-    sources = [s.strip() for s in re.split(r"[|,]", sources_raw) if s.strip().lower().startswith("http")]
+    sources = [u.rstrip(".,;)]*_\"'") for u in re.findall(r"https?://[^\s|\]\[<>]+", sources_raw)]
 
     anchor = 0
     for label in ("SOURCES", "KEYWORD", "TAGS", "TITLE"):
@@ -578,6 +595,9 @@ def parse_niche_output(text: str, fallback_title: str = "") -> tuple[str, str, s
         body = text[anchor + separator.end():].strip()
     else:
         body = text[anchor:].strip() if anchor else text.strip()
+
+    # 글 제목은 Blogger/Jekyll 레이아웃이 따로 그리므로, 본문 맨 앞의 "# 제목"은 제목이 두 번 나오게 한다.
+    body = re.sub(r"\A#[ \t]+[^\n]*\n+", "", body, count=1).lstrip()
 
     return title, tags, keyword, sources, body
 
@@ -1015,6 +1035,30 @@ def capture_page_screenshot(url: str, out_path: Path) -> bool:
         return False
 
 
+def is_safe_public_https_url(url: str) -> bool:
+    """스크린샷 대상 URL이 https이고 공인 주소로 풀리는 호스트인지. 모델 출력에서 온 URL을
+    러너의 헤드리스 브라우저로 여는 일이라, localhost/사설망/링크로컬(169.254.x.x 등)을 막는다."""
+    import ipaddress
+    import socket
+
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except ValueError:
+        return False
+    host = parsed.hostname
+    if parsed.scheme != "https" or not host or host.lower() == "localhost":
+        return False
+    try:
+        infos = socket.getaddrinfo(host, parsed.port or 443, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+            return False
+    return True
+
+
 def build_screenshot_photos(sources: list[str], slug: str) -> list[dict]:
     """SOURCES로 받은 공식 페이지 URL들을 직접 캡처해서, docs/assets/img/<slug>/
     에 저장하고 절대 URL과 함께 사진 dict 목록으로 돌려준다(로그인이 필요하거나
@@ -1025,6 +1069,9 @@ def build_screenshot_photos(sources: list[str], slug: str) -> list[dict]:
     photos = []
     for i, url in enumerate(sources[:5], start=1):
         out_path = SCREENSHOTS_ASSET_DIR / slug / f"{i}.png"
+        if not is_safe_public_https_url(url):
+            print(f"안전하지 않은 스크린샷 대상 URL이라 건너뜁니다: {url}")
+            continue
         if not capture_page_screenshot(url, out_path):
             continue
         domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
@@ -1261,7 +1308,7 @@ BLOGGER_ABOUT_PAGE_MD_TEMPLATE = """\
 
 - 소프트웨어 요금제·플랜·기능 제공 여부처럼 시점에 따라 바뀔 수 있는 내용은 발행 전에 웹 검색으로 사실을 확인합니다.
 - 제3자 리뷰를 요약하는 대신, 해당 서비스의 공식 페이지(요금제 페이지, 지원 문서 등)를 직접 출처로 인용합니다.
-- 글에 쓰이는 스크린샷은 실제로 다루는 공식 공개 페이지를 직접 캡처한 것이며, 다른 사이트나 블로그의 이미지를 그대로 가져다 쓰지 않습니다.
+- 글에 쓰이는 스크린샷은 실제로 다루는 공식 공개 페이지를 직접 캡처한 것이며, 다른 사이트나 블로그의 이미지를 그대로 가져다 쓰지 않습니다. 캡처가 불가능한 경우에는 라이선스가 명확한 Unsplash 무료 사진을 대표 이미지로 쓰고 사진작가를 표기하며, 이미지 없이 발행하는 글도 있습니다.
 - 분량을 채우기보다 실제로 도움이 되고 구체적인 내용을 목표로 합니다.
 
 이 블로그는 현재 제휴/추천 링크를 사용하지 않습니다. 자세한 내용은 [개인정보처리방침]({privacy_url}) 페이지를 참고해주세요.
@@ -2149,9 +2196,13 @@ def main() -> None:
 
         results.append(("trends(simple-tech-fix)", _run_arm("trends(simple-tech-fix)", _run_trends)))
 
-    if not run_trends:
-        sync_blogger_static_pages()
-    sync_second_blogger_static_pages()
+    # 정적 페이지 동기화는 부가 작업이다. 여기서 예외가 나서 프로세스가 죽으면 이미 Blogger에
+    # 발행된 글의 파일/사용 기록이 커밋되지 못해 다음 회차에 같은 주제가 중복 발행될 수 있다.
+    for sync_fn in ((sync_second_blogger_static_pages,) if run_trends else (sync_blogger_static_pages, sync_second_blogger_static_pages)):
+        try:
+            sync_fn()
+        except Exception as e:
+            print(f"정적 페이지 동기화 중 오류(무시하고 계속): {sync_fn.__name__}: {type(e).__name__}: {e}")
 
     if results and not any(ok for _, ok in results):
         sys.exit(f"이번 실행의 모든 발행 갈래가 실패했습니다: {[label for label, _ in results]}")
