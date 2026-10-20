@@ -9,6 +9,7 @@ on:
   # 한국시간 오전 9시 5분(UTC 00:05)에 한 번 돈다.
   schedule:
     - cron: "5 0 * * *" # UTC 00:05 = KST 오전 9시 5분 - trends(구글 트렌드 US -> Simple Tech Fix), 하루 1회
+    - cron: "10 0 * * *" # UTC 00:10 = KST 오전 9시 10분 - trends_kr(구글 트렌드 KR -> new-maind, 한국어), 하루 1회
   # 아래는 2026-10-07부터 계속 꺼 둔 이전 갈래들이다. 다시 켜려면 맨 앞 "# "를 지우고
   # 위 schedule 목록에 옮겨 적으면 된다(RUN_ARMS 계산식이 이 cron 문자열로 갈래를 정한다).
   #   - cron: "0 22 * * *" # UTC 22:00 = 한국시간(KST) 오전 7시 (다음날) - new-maind(A/B/C/E) 전용, REST_WEEKDAYS(화/일)엔 스스로 건너뜀
@@ -52,8 +53,9 @@ on:
           비워두면 이번 실행에서 일반 니치(new-maind)와 AI/테크 논평 전용
           일일(simple-tech-fix, T1/T2) 갈래를 둘 다 실행. "general"이면
           new-maind 갈래만, "tech_fix"면 simple-tech-fix 갈래만, "trends"면
-          구글 트렌드(US) 검색량 1,000+ 항목으로 Simple Tech Fix에 쓰는 갈래만
-          (비워두면 trends는 실행되지 않음) 강제 지정 -
+          구글 트렌드(US) IT·AI 항목으로 Simple Tech Fix에 쓰는 갈래만, "trends_kr"이면
+          구글 트렌드(KR) IT·AI 항목으로 new-maind에 한국어로 쓰는 갈래만
+          (비워두면 trends/trends_kr은 실행되지 않음) 강제 지정 -
           수동 검증용. 스케줄(cron) 실행은 이 값과 무관하게 어느 cron이
           켰는지로 자동 결정됨(아래 RUN_ARMS 계산 참고).
         required: false
@@ -102,6 +104,7 @@ jobs:
               github.event.schedule == '0 22 * * *' && 'general'
               || (github.event.schedule == '0 0 * * *' || github.event.schedule == '0 3 * * *' || github.event.schedule == '0 8 * * *') && 'tech_fix'
               || (github.event.schedule == '5 0 * * *' || github.event.schedule == '5 9 * * *') && 'trends'
+              || github.event.schedule == '10 0 * * *' && 'trends_kr'
               || github.event.inputs.run_arms
               || ''
             }}
@@ -132,6 +135,7 @@ jobs:
           for f in docs/assets auto-blog-autopilot/data/used_topic_ids.json \
                    auto-blog-autopilot/data/used_topic_ids_second_blog.json \
                    auto-blog-autopilot/data/used_topic_ids_trends.json \
+                   auto-blog-autopilot/data/used_topic_ids_trends_kr.json \
                    auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json; do
             if [ -e "$f" ] || git cat-file -e "HEAD:$f" 2>/dev/null; then
               git add "$f"

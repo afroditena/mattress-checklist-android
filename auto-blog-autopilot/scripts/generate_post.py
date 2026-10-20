@@ -1331,6 +1331,7 @@ BLOGGER_ABOUT_PAGE_MD_TEMPLATE = """\
 - 제3자 리뷰를 요약하는 대신, 해당 서비스의 공식 페이지(요금제 페이지, 지원 문서 등)를 직접 출처로 인용합니다.
 - 글에 쓰이는 스크린샷은 실제로 다루는 공식 공개 페이지를 직접 캡처한 것이며, 다른 사이트나 블로그의 이미지를 그대로 가져다 쓰지 않습니다. 캡처가 불가능한 경우에는 라이선스가 명확한 Unsplash 무료 사진을 대표 이미지로 쓰고 사진작가를 표기하며, 이미지 없이 발행하는 글도 있습니다.
 - 분량을 채우기보다 실제로 도움이 되고 구체적인 내용을 목표로 합니다.
+- 일부 글은 구글 트렌드에서 뜬 IT·AI 관련 주제를 골라 확인된 사실 위주로 정리하고, 마지막에 글쓴이의 생각을 따로 밝힙니다. 사망·범죄 피해 같은 비극적인 소식은 다루지 않습니다.
 
 이 블로그는 현재 제휴/추천 링크를 사용하지 않습니다. 자세한 내용은 [개인정보처리방침]({privacy_url}) 페이지를 참고해주세요.
 
@@ -1758,10 +1759,40 @@ TRENDS_LOW_VALUE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 TRENDS_MIN_DISTINCT_SOURCES = 2
+TRENDS_KR_USED_FILE = PROJECT_DIR / "data" / "used_topic_ids_trends_kr.json"
+
+# 2026-10-20: 사용자 요청("각 블로그에 구글 트렌드 중 주제에 맞는 것을 골라 발행")으로 두 블로그 모두
+# IT·AI·테크 관련 트렌드만 고른다. Simple Tech Fix는 미국(US) 트렌드를 영어로, new-maind는 한국(KR)
+# 트렌드를 한국어로 쓴다. 관련성은 검색어/뉴스 제목의 키워드로 판정한다(비용 없는 결정적 방식).
+TRENDS_TECH_PATTERN = re.compile(
+    r"\b(ai|chatgpt|gpt|openai|anthropic|claude|gemini|copilot|llm|chatbot|google|alphabet|apple|iphone|ipad|ios|"
+    r"macbook|android|pixel|samsung|galaxy|microsoft|windows|xbox|nvidia|amd|intel|qualcomm|tsmc|chips?|semiconductors?|"
+    r"tesla|waymo|robotaxi|robots?|drones?|meta|instagram|facebook|whatsapp|tiktok|youtube|twitter|amazon|aws|netflix|"
+    r"spotify|apps?|software|cyber\w*|hack\w*|breach|ransomware|privacy|quantum|startups?|tech|technology|gadgets?|"
+    r"smartphones?|laptops?|browser|chrome|cloud|outage|battery|satellites?|starlink|spacex|playstation|nintendo|steam)\b"
+    r"|인공지능|챗gpt|지피티|오픈ai|삼성|갤럭시|애플|아이폰|구글|마이크로소프트|엔비디아|반도체|네이버|카카오|테슬라|"
+    r"로봇|드론|업데이트|해킹|유출|개인정보|스마트폰|노트북|클라우드|서버|장애|먹통|양자|스타트업|전기차|배터리|위성|"
+    r"게임|플레이스테이션|닌텐도|유튜브|인스타그램|틱톡|쿠팡|토스|\bAI\b",
+    re.IGNORECASE,
+)
+TRENDS_BLOCKED_PATTERN_KO = re.compile(
+    r"사망|숨져|숨진|참사|살인|피살|폭행|성폭행|성범죄|자살|극단적|실종|장례|부고|추락|화재|붕괴|흉기|테러|납치|희생자"
+)
+TRENDS_LOW_VALUE_PATTERN_KO = re.compile(r"스코어|경기 일정|중계|라인업|부상 명단|배당|운세|로또|날씨|순위|퀴즈|정답|미세먼지")
 
 
 def _has_non_latin_letters(text: str) -> bool:
     return any(ch.isalpha() and ord(ch) > 0x024F for ch in text)
+
+
+def _has_unsupported_script(text: str, lang: str) -> bool:
+    """en: 라틴 문자 외 금지. ko: 라틴 + 한글만 허용(중국어/키릴 등 제외)."""
+    if lang == "en":
+        return _has_non_latin_letters(text)
+    return any(
+        ch.isalpha() and ord(ch) > 0x024F and not (0xAC00 <= ord(ch) <= 0xD7A3 or 0x1100 <= ord(ch) <= 0x11FF or 0x3130 <= ord(ch) <= 0x318F)
+        for ch in text
+    )
 
 
 def _too_similar_to_used(topic_id: str, used: set[str]) -> bool:
@@ -1778,13 +1809,15 @@ def _too_similar_to_used(topic_id: str, used: set[str]) -> bool:
     return False
 
 
-def select_trend_topic(items: list[dict] | None = None, used_file: Path | None = None) -> dict | None:
+def select_trend_topic(
+    items: list[dict] | None = None, used_file: Path | None = None, lang: str = "en", geo: str = "US", require_tech: bool = True
+) -> dict | None:
     """구글 트렌드 항목 중 검색량 TRENDS_MIN_TRAFFIC 이상, 아직 안 쓴 것, 비극성이 아닌 것
     가운데 검색량이 가장 큰 하나를 골라 파이프라인 공용 topic dict로 돌려준다.
     없으면 None."""
     if items is None:
-        items = fetch_google_trends("US")
-    used = set(load_used_topic_ids(used_file or TRENDS_USED_FILE))
+        items = fetch_google_trends(geo)
+    used = set(load_used_topic_ids(used_file or (TRENDS_KR_USED_FILE if lang == "ko" else TRENDS_USED_FILE)))
     candidates = []
     for it in items:
         if it["traffic"] < TRENDS_MIN_TRAFFIC:
@@ -1792,14 +1825,17 @@ def select_trend_topic(items: list[dict] | None = None, used_file: Path | None =
         topic_id = slugify(it["title"])
         if not topic_id or topic_id in used or _too_similar_to_used(topic_id, used):
             continue
-        if _has_non_latin_letters(it["title"]):
-            print(f"영어 블로그에 맞지 않는 비라틴 문자 검색어라 건너뜀: {it['title']}")
+        if _has_unsupported_script(it["title"], lang):
+            print(f"블로그 언어({lang})에 맞지 않는 문자 검색어라 건너뜀: {it['title']}")
             continue
         text = it["title"] + " " + " ".join(n.get("title", "") for n in it["news"])
-        if TRENDS_BLOCKED_PATTERN.search(text):
+        if TRENDS_BLOCKED_PATTERN.search(text) or TRENDS_BLOCKED_PATTERN_KO.search(text):
             print(f"비극성 사건 가능성으로 건너뜀: {it['title']}")
             continue
-        if TRENDS_LOW_VALUE_PATTERN.search(text):
+        if require_tech and not TRENDS_TECH_PATTERN.search(text):
+            print(f"블로그 주제(IT·AI·테크)와 무관해 건너뜀: {it['title']}")
+            continue
+        if TRENDS_LOW_VALUE_PATTERN.search(text) or TRENDS_LOW_VALUE_PATTERN_KO.search(text):
             print(f"분석할 거리가 얇은 주제(경기/스코어/지역 정보 등)라 건너뜀: {it['title']}")
             continue
         if len({n.get("source", "") for n in it["news"] if n.get("source")}) < TRENDS_MIN_DISTINCT_SOURCES:
@@ -1811,7 +1847,7 @@ def select_trend_topic(items: list[dict] | None = None, used_file: Path | None =
     _, topic_id, it = max(candidates, key=lambda c: c[0])
     return {
         "id": topic_id,
-        "cluster_name": "Trending Now (Google Trends US)",
+        "cluster_name": f"Trending Now (Google Trends {geo})",
         "keyword": it["title"],
         "format": "trend_take",
         "trend": it,
@@ -1828,10 +1864,32 @@ SOURCES: (2-4 reputable news or primary-source URLs you actually used, separated
 
 
 TRENDS_MIN_WORDS = 700
+TRENDS_MIN_CHARS_KO = 1800
+OUTPUT_FORMAT_BLOCK_TRENDS_KO = """출력 형식(그대로 따를 것 - 라벨은 영어 그대로 쓰고, 내용만 한국어로):
+TITLE: (한국 독자에게 자연스러운 제목, 50자 이내, 낚시성 문구 금지, 출처가 뒷받침하지 않는 단정 금지)
+TAGS: (쉼표로 구분한 태그 3~5개, 한국어)
+KEYWORD: (급상승 검색어)
+SOURCES: (실제로 참고한 신뢰할 만한 언론·1차 출처 URL 2~4개, " | "로 구분)
+---
+(위 구조를 따르는 마크다운 본문 - 한국어)"""
 
 
-def check_trend_post(body: str) -> str | None:
+def check_trend_post(body: str, lang: str = "en") -> str | None:
     """trends 글 발행 전 검사. 문제가 있으면 이유 문자열, 없으면 None."""
+    if lang == "ko":
+        chars = len(re.sub(r"\s+", "", re.sub(r"\(https?://[^)]+\)|https?://\S+", " ", body)))
+        if chars < TRENDS_MIN_CHARS_KO:
+            return f"본문이 너무 짧음({chars}자 < {TRENDS_MIN_CHARS_KO})"
+        headings = re.findall(r"^##\s+(.+?)\s*$", body, re.MULTILINE)
+        if not headings or headings[-1].strip() != "내 생각":
+            return "마지막 섹션이 '내 생각'이 아님"
+        if "출처" not in [h.strip() for h in headings]:
+            return "출처 섹션이 없음"
+        if len(set(re.findall(r"https?://([^/\s)]+)", body))) < 2:
+            return "서로 다른 출처 도메인이 2곳 미만"
+        if "![" in body:
+            return "이미지가 포함됨"
+        return None
     words = len(re.findall(r"\b[\w'’-]+\b", re.sub(r"\(https?://[^)]+\)|https?://\S+", " ", body)))
     if words < TRENDS_MIN_WORDS:
         return f"본문이 너무 짧음({words}단어 < {TRENDS_MIN_WORDS})"
@@ -1845,6 +1903,61 @@ def check_trend_post(body: str) -> str | None:
     if "![" in body:
         return "이미지가 포함됨"
     return None
+
+
+def build_trend_take_prompt_ko(topic: dict, recent_titles: list[str]) -> str:
+    """Trend Take 한국어판(new-maind, 구글 트렌드 KR): 막 뜬 IT·AI 관련 검색어를 확인된 사실 위주로
+    정리하고, 마지막 섹션을 글쓴이의 생각("내 생각")으로 끝낸다."""
+    trend = topic["trend"]
+    news_lines = "\n".join(
+        f"- [{n.get('source', '?')}] {n.get('title', '')} ({n.get('url', '')})" + (f"\n  요약: {n['snippet']}" if n.get("snippet") else "")
+        for n in trend["news"]
+    ) or "- (연결된 뉴스 없음)"
+    return f"""당신은 한국 독자를 대상으로 하는 IT·AI 블로그(new-maind)에 실릴 글을 씁니다. 오늘 글은 한국 구글 검색에서 지금 급상승 중인 검색어를 다루고, 무슨 일인지 쉽게 풀어 설명한 뒤, 글쓴이의 생각으로 끝납니다.
+
+급상승 검색어: "{trend['title']}"
+대략적인 검색량: {trend.get('traffic_text', '알 수 없음')}
+처음 급상승한 시각: {trend.get('pub_date', '알 수 없음')}
+구글이 이 검색어에 붙여 준 뉴스(단서일 뿐이니 확인 없이 옮기지 말 것):
+{news_lines}
+{_niche_avoid_block(recent_titles)}
+## 조사와 출처
+
+웹 검색으로 실제로 무슨 일인지 확인하세요. 포털 요약이나 모음 사이트보다 언론사 원문과 1차 출처(회사 공식 발표 등)를 우선합니다. 이름, 숫자, 날짜, 인용, 사건을 절대 지어내지 마세요. 확인하지 못한 것은 글에서 확인하지 못했다고 쓰세요. 기사를 그대로 옮기지 말고 자기 말로 풀어 쓰며, 직접 인용은 출처당 짧은 한 줄까지만 씁니다.
+
+## 비극적인 소식이라면
+
+조사해 보니 사망, 강력범죄, 피해자가 있는 큰 사고, 미성년자, 일반인의 사생활이 중심인 소식이면 글을 쓰지 마세요. 다른 말 없이 이 한 줄만 출력합니다: SKIP - <이유 한 문장>
+
+## 구성 (2,500~3,500자, 문단 길이는 들쭉날쭉하게)
+
+헤드라인 재서술로 끝나면 안 됩니다. 제목만 읽어서는 알 수 없는 배경, 짧은 타임라인, 숫자(출처 명시), 비슷한 과거 사례와의 비교 중 최소 하나를 담고, 서로 다른 언론·출처를 2곳 이상 쓰세요.
+
+1. 구체적인 제목, 그리고 날짜를 넣어 지금 무슨 일인지 쉽게 말하는 첫 문단.
+2. ## 무슨 일이 있었나 - 확인된 사실만, 사실마다 출처("○○에 따르면")를 밝혀 짧은 문단이나 짧은 목록으로.
+3. ## 왜 지금 검색하나 - 검색이 급증한 이유와 누가 찾는지.
+4. ## 기사들이 놓친 배경 - 독자가 이해하는 데 도움이 되는 배경, 타임라인, 비교(글쓴이의 독자적인 분석, 최소 400자).
+5. ## 확인된 것과 확인되지 않은 것 - 사실, 아직 열린 질문, 소문, 진행 중인 부분을 나눠서.
+6. ## 출처 - 실제로 쓴 링크 목록(서로 다른 언론·출처 2곳 이상).
+7. ## 내 생각 - 글의 맨 마지막 섹션. 글쓴이의 관점을 짧은 문단 3~5개로.
+
+## "내 생각" 쓰는 법
+
+- 의견이라는 점을 분명히 하고(예: "나는 ~라고 본다"), 의견마다 이유를 댄다.
+- "장단점이 있다" 같은 모호한 결말 대신, 이 일이 무엇을 뜻하는지 또는 독자가 무엇을 지켜보거나 해야 하는지 구체적으로 판단한다.
+- 반대편의 타당한 점을 하나는 인정한다.
+- 누군가의 사생활, 건강, 동기, 유죄 여부, 법적 책임을 추측하지 않는다. 법률·의료·금융 쪽은 전문가가 아니라고 밝힌다.
+- 판단 그 자체로 끝낸다. 인사말, 행동 촉구, 앞 내용 요약은 쓰지 않는다.
+
+## 정직성 규칙
+
+- 직접 써 보거나 겪은 적 없는 일을 겪은 것처럼 쓰지 않는다("직접 써 봤더니", "제 경험상").
+- 이미지나 이미지 링크를 넣지 않는다.
+
+{HUMAN_STYLE_BLOCK_KO}
+
+{OUTPUT_FORMAT_BLOCK_TRENDS_KO}
+"""
 
 
 def build_trend_take_prompt(topic: dict, recent_titles: list[str]) -> str:
@@ -2133,6 +2246,7 @@ def main() -> None:
     run_general = run_arms in ("", "general")
     run_tech_fix = run_arms in ("", "tech_fix")
     run_trends = run_arms == "trends"
+    run_trends_kr = run_arms == "trends_kr"
 
     results: list[tuple[str, bool]] = []
 
@@ -2220,9 +2334,36 @@ def main() -> None:
 
         results.append(("trends(simple-tech-fix)", _run_arm("trends(simple-tech-fix)", _run_trends)))
 
+    if run_trends_kr:
+        # 구글 트렌드(KR) 중 IT·AI 관련 항목으로 new-maind(BLOGGER_BLOG_ID)에 한국어 글 한 편.
+        def _run_trends_kr():
+            topic = select_trend_topic(lang="ko", geo="KR", used_file=TRENDS_KR_USED_FILE)
+            if not topic:
+                print(f"검색량 {TRENDS_MIN_TRAFFIC:,}+ 이면서 안 쓴 IT·AI 관련 한국 구글 트렌드 항목이 없어 이번 회차는 건너뜁니다.")
+                return
+            print(f"오늘의 한국 트렌드: {topic['keyword']} ({topic['trend'].get('traffic_text')})")
+            prompt = build_trend_take_prompt_ko(topic, get_recent_titles())
+            _run_generation(
+                prompt,
+                topic["keyword"],
+                niche_topic=topic,
+                used_ids_file=TRENDS_KR_USED_FILE,
+                image_mode="none",
+                skip_marker="SKIP",
+                body_check=lambda b: check_trend_post(b, "ko"),
+            )
+
+        results.append(("trends_kr(new-maind)", _run_arm("trends_kr(new-maind)", _run_trends_kr)))
+
     # 정적 페이지 동기화는 부가 작업이다. 여기서 예외가 나서 프로세스가 죽으면 이미 Blogger에
     # 발행된 글의 파일/사용 기록이 커밋되지 못해 다음 회차에 같은 주제가 중복 발행될 수 있다.
-    for sync_fn in ((sync_second_blogger_static_pages,) if run_trends else (sync_blogger_static_pages, sync_second_blogger_static_pages)):
+    if run_trends:
+        sync_fns = (sync_second_blogger_static_pages,)
+    elif run_trends_kr:
+        sync_fns = (sync_blogger_static_pages,)
+    else:
+        sync_fns = (sync_blogger_static_pages, sync_second_blogger_static_pages)
+    for sync_fn in sync_fns:
         try:
             sync_fn()
         except Exception as e:
