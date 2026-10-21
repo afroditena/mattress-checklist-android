@@ -1331,7 +1331,7 @@ BLOGGER_ABOUT_PAGE_MD_TEMPLATE = """\
 - 제3자 리뷰를 요약하는 대신, 해당 서비스의 공식 페이지(요금제 페이지, 지원 문서 등)를 직접 출처로 인용합니다.
 - 글에 쓰이는 스크린샷은 실제로 다루는 공식 공개 페이지를 직접 캡처한 것이며, 다른 사이트나 블로그의 이미지를 그대로 가져다 쓰지 않습니다. 캡처가 불가능한 경우에는 라이선스가 명확한 Unsplash 무료 사진을 대표 이미지로 쓰고 사진작가를 표기하며, 이미지 없이 발행하는 글도 있습니다.
 - 분량을 채우기보다 실제로 도움이 되고 구체적인 내용을 목표로 합니다.
-- 일부 글은 구글 트렌드에서 뜬 IT·AI 관련 주제를 골라 확인된 사실 위주로 정리하고, 마지막에 글쓴이의 생각을 따로 밝힙니다. 사망·범죄 피해 같은 비극적인 소식은 다루지 않습니다.
+- 일부 글은 구글 트렌드에서 뜬 경제·비즈니스, 과학, IT, 소비자 이슈, 정책 주제를 골라 확인된 사실 위주로 정리하고, 마지막에 글쓴이의 생각을 따로 밝힙니다. 사망·범죄 피해 같은 비극적인 소식은 다루지 않습니다.
 
 이 블로그는 현재 제휴/추천 링크를 사용하지 않습니다. 자세한 내용은 [개인정보처리방침]({privacy_url}) 페이지를 참고해주세요.
 
@@ -1775,6 +1775,25 @@ TRENDS_TECH_PATTERN = re.compile(
     r"게임|플레이스테이션|닌텐도|유튜브|인스타그램|틱톡|쿠팡|토스|\bAI\b",
     re.IGNORECASE,
 )
+# 2026-10-21: 사용자 선택으로 주제 범위를 IT·AI에서 "배경 분석이 가능한" 경제·비즈니스, 과학, 소비자 이슈,
+# 정책까지 넓힌다(기존 테크 포함). 연예인·정치인 이름, 스포츠, 날씨는 계속 제외하고, 당파적 정치(선거·여론조사 등)도
+# 제외한다.
+TRENDS_SCOPE_EXTRA_PATTERN = re.compile(
+    r"\b(economy|economic|inflation|recession|gdp|tariffs?|trade|stocks?|shares|earnings|ipo|merger|acquisition|acquires?|"
+    r"bankrupt\w*|layoffs?|jobs report|unemployment|interest rates?|federal reserve|treasury|bonds?|oil|gas prices|prices?|"
+    r"housing|mortgage|rent|wages?|minimum wage|tax(?:es)?|banks?|crypto|bitcoin|ethereum|retail\w*|recall\w*|refunds?|"
+    r"subscriptions?|fees?|consumers?|airlines?|flights?|fda|cdc|vaccines?|study|research|scientists?|nasa|space|climate|"
+    r"energy|solar|nuclear|regulat\w*|lawsuit|ruling|supreme court|congress|bill|ban|policy|sanctions|antitrust|ftc|sec|"
+    r"business|market|markets|companies|company|ceo|funding|revenue|profit|sales)\b"
+    r"|경제|물가|금리|환율|주가|주식|증시|코스피|실적|상장|인수|합병|파산|구조조정|해고|고용|실업|임금|최저임금|세금|세제|"
+    r"부동산|전세|월세|대출|은행|보험|가상자산|비트코인|리콜|환불|구독|요금|가격 인상|소비자|항공|과학|연구|논문|우주|기후|"
+    r"에너지|원전|태양광|백신|식약처|질병청|규제|법안|법원|판결|소송|정책|제재|공정위|관세|무역|수출|예산|기업|매출|영업이익",
+    re.IGNORECASE,
+)
+TRENDS_PARTISAN_PATTERN = re.compile(
+    r"\b(elections?|polls?|polling|campaign|candidates?|ballots?|impeach\w*|midterms?|primary|primaries)\b|선거|후보|지지율|여론|탄핵|대선|총선",
+    re.IGNORECASE,
+)
 TRENDS_BLOCKED_PATTERN_KO = re.compile(
     r"사망|숨져|숨진|참사|살인|피살|폭행|성폭행|성범죄|자살|극단적|실종|장례|부고|추락|화재|붕괴|흉기|테러|납치|희생자"
 )
@@ -1838,7 +1857,10 @@ def select_trend_topic(
         if TRENDS_BLOCKED_PATTERN.search(text) or TRENDS_BLOCKED_PATTERN_KO.search(text):
             print(f"비극성 사건 가능성으로 건너뜀: {it['title']}")
             continue
-        keyword_fit = bool(TRENDS_TECH_PATTERN.search(text))
+        if TRENDS_PARTISAN_PATTERN.search(text):
+            print(f"당파적 정치 이슈라 건너뜀: {it['title']}")
+            continue
+        keyword_fit = bool(TRENDS_TECH_PATTERN.search(text) or TRENDS_SCOPE_EXTRA_PATTERN.search(text))
         if TRENDS_LOW_VALUE_PATTERN.search(text) or TRENDS_LOW_VALUE_PATTERN_KO.search(text):
             print(f"분석할 거리가 얇은 주제(경기/스코어/지역 정보 등)라 건너뜀: {it['title']}")
             continue
@@ -1857,9 +1879,9 @@ def select_trend_topic(
         if idx is not None and 0 <= idx < len(top):
             candidates.append(top[idx])
         else:
-            print("모델 판정: 블로그 주제와 연결되는 항목이 없어 건너뜁니다: " + ", ".join(c[2]["title"] for c in top))
+            print("모델 판정: 블로그 주제 범위와 연결되는 항목이 없어 건너뜁니다: " + ", ".join(c[2]["title"] for c in top))
     elif offtopic and not candidates:
-        print("블로그 주제(IT·AI·테크)와 무관해 건너뜀: " + ", ".join(c[2]["title"] for c in offtopic))
+        print("블로그 주제 범위(경제·비즈니스/과학/소비자/정책/테크)와 무관해 건너뜀: " + ", ".join(c[2]["title"] for c in offtopic))
     if not candidates:
         return None
     _, topic_id, it = max(candidates, key=lambda c: c[0])
@@ -1876,9 +1898,9 @@ def make_relevance_picker(lang: str = "en"):
     """트렌드 항목들 중 블로그 주제(IT·AI·테크)와 실제로 연결되는 하나의 인덱스를 모델에게 고르게 하는
     함수를 돌려준다(없으면 None). 웹 검색 없이 짧은 호출 한 번이라 비용이 작다."""
     topic = (
-        "technology, AI, software, internet services and platforms, consumer electronics, tech companies, cybersecurity or digital policy"
+        "business and the economy, science, technology and AI, consumer issues (prices, products, recalls, fees), or public policy and regulation"
         if lang == "en"
-        else "IT, AI, 소프트웨어, 인터넷 서비스·플랫폼, 전자기기, 기술 기업, 보안, 디지털 정책"
+        else "경제·비즈니스, 과학, IT·AI, 소비자 이슈(물가·제품·리콜·요금), 정책·규제"
     )
 
     def picker(items: list[dict]):
@@ -1889,7 +1911,7 @@ def make_relevance_picker(lang: str = "en"):
         prompt = (
             f"Below are Google Trends search terms with their top headlines. Pick the ONE term that has the clearest, real connection to "
             f"{topic}, so that a blog post about it could teach readers something useful in that area. "
-            f"If none has a real connection, answer NONE. Do not stretch: a celebrity, politician, sports or weather item is NONE.\n\n"
+            f"If none has a real connection, answer NONE. Do not stretch: a celebrity or politician name, entertainment gossip, an election or poll, sports, weather or a local incident is NONE.\n\n"
             + "\n".join(lines)
             + "\n\nAnswer with only the number, or NONE."
         )
@@ -1961,7 +1983,7 @@ def build_trend_take_prompt_ko(topic: dict, recent_titles: list[str]) -> str:
         f"- [{n.get('source', '?')}] {n.get('title', '')} ({n.get('url', '')})" + (f"\n  요약: {n['snippet']}" if n.get("snippet") else "")
         for n in trend["news"]
     ) or "- (연결된 뉴스 없음)"
-    return f"""당신은 한국 독자를 대상으로 하는 IT·AI 블로그(new-maind)에 실릴 글을 씁니다. 오늘 글은 한국 구글 검색에서 지금 급상승 중인 검색어를 다루고, 무슨 일인지 쉽게 풀어 설명한 뒤, 글쓴이의 생각으로 끝납니다.
+    return f"""당신은 한국 독자를 대상으로 경제·비즈니스, 과학, IT·AI, 소비자 이슈, 정책을 풀어 설명하는 블로그(new-maind)에 실릴 글을 씁니다. 오늘 글은 한국 구글 검색에서 지금 급상승 중인 검색어를 다루고, 무슨 일인지 쉽게 풀어 설명한 뒤, 글쓴이의 생각으로 끝납니다.
 
 급상승 검색어: "{trend['title']}"
 대략적인 검색량: {trend.get('traffic_text', '알 수 없음')}
@@ -2018,7 +2040,7 @@ def build_trend_take_prompt(topic: dict, recent_titles: list[str]) -> str:
         f"- [{n.get('source', '?')}] {n.get('title', '')} ({n.get('url', '')})" + (f"\n  snippet: {n['snippet']}" if n.get("snippet") else "")
         for n in trend["news"]
     ) or "- (no news items attached)"
-    return f"""You are writing for Simple Tech Fix, an English-language blog for a US audience. Today's post reacts to something that is trending in US Google Search right now, explains it clearly, and ends with the writer's own considered perspective.
+    return f"""You are writing for Simple Tech Fix, an English-language blog for a US audience that explains technology, business, science, consumer and policy stories. Today's post reacts to something that is trending in US Google Search right now, explains it clearly, and ends with the writer's own considered perspective.
 
 Trending search term: "{trend['title']}"
 Approximate search volume: {trend.get('traffic_text', 'unknown')}
@@ -2364,7 +2386,7 @@ def main() -> None:
         def _run_trends():
             topic = select_trend_topic(relevance_picker=make_relevance_picker("en"))
             if not topic:
-                print(f"검색량 {TRENDS_MIN_TRAFFIC:,}+ 이면서 아직 안 쓴 비극성이 아닌 구글 트렌드 항목이 없어 이번 회차는 건너뜁니다.")
+                print(f"검색량 {TRENDS_MIN_TRAFFIC:,}+ 이면서 아직 안 쓴 블로그 주제 범위의 구글 트렌드 항목이 없어 이번 회차는 건너뜁니다.")
                 return
             print(f"오늘의 트렌드: {topic['keyword']} ({topic['trend'].get('traffic_text')})")
             recent_titles = get_recent_titles()
@@ -2387,7 +2409,7 @@ def main() -> None:
         def _run_trends_kr():
             topic = select_trend_topic(lang="ko", geo="KR", used_file=TRENDS_KR_USED_FILE, relevance_picker=make_relevance_picker("ko"))
             if not topic:
-                print(f"검색량 {TRENDS_MIN_TRAFFIC:,}+ 이면서 안 쓴 IT·AI 관련 한국 구글 트렌드 항목이 없어 이번 회차는 건너뜁니다.")
+                print(f"검색량 {TRENDS_MIN_TRAFFIC:,}+ 이면서 안 쓴 블로그 주제 범위의 한국 구글 트렌드 항목이 없어 이번 회차는 건너뜁니다.")
                 return
             print(f"오늘의 한국 트렌드: {topic['keyword']} ({topic['trend'].get('traffic_text')})")
             prompt = build_trend_take_prompt_ko(topic, get_recent_titles())
