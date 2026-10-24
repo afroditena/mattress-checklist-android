@@ -1,4 +1,37 @@
 {
   "applied": {},
-  "failed": {}
+  "failed": {
+    "7520663994521574164": {
+      "attempts": 1,
+      "reason": "원본보다 너무 길어짐(1260단어, 원본 861단어)"
+    },
+    "3231511346750492793": {
+      "attempts": 1,
+      "reason": "원본보다 너무 길어짐(1324단어, 원본 931단어)"
+    },
+    "6018897556453354255": {
+      "attempts": 1,
+      "reason": "원본보다 너무 길어짐(1332단어, 원본 923단어)"
+    },
+    "2534468291169022897": {
+      "attempts": 1,
+      "reason": "원본보다 너무 길어짐(1618단어, 원본 1136단어)"
+    },
+    "156684034025497886": {
+      "attempts": 1,
+      "reason": "원본 이미지가 빠짐: ['https://afroditena.github.io/mattress-checklist-android/assets/img/ai-agents-in-2026-did-they-actually-change-everything/3.png']"
+    },
+    "4619181030511323004": {
+      "attempts": 1,
+      "reason": "원본 이미지가 빠짐: ['https://afroditena.github.io/mattress-checklist-android/assets/img/chatgpt-vs-gemini-vs-claude-who-wins-attention-2026/3.png']"
+    },
+    "3952361187107101052": {
+      "attempts": 1,
+      "reason": "원본보다 너무 길어짐(1298단어, 원본 869단어)"
+    },
+    "5876695364506999109": {
+      "attempts": 1,
+      "reason": "원본보다 너무 길어짐(1416단어, 원본 994단어)"
+    }
+  }
 }
