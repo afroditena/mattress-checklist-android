@@ -1724,6 +1724,7 @@ def _html_image_urls(html_text: str) -> list[str]:
 
 
 def build_rewrite_prompt(title: str, original_html: str) -> str:
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%B %Y")
     return f"""You are revising one existing post on Simple Tech Fix, an English-language blog about work tools and AI tools for a US audience. The post is already published. Rewrite it to meet the blog's current writing standards while keeping the author's voice.
 
 Post title (do not change it, do not output it): {title}
@@ -1740,10 +1741,11 @@ ORIGINAL>>>
 ## Keep the structure and the assets
 - Same topic, same section order, same H2 headings unless a heading is generic filler. Keep every image exactly as a markdown image line (![alt](url) with the original URL), keep every link, keep tables as markdown tables.
 - Length about the same as the original (within roughly 20%). Do not pad.
+- If the original ends with a "Reviewed ..." / disclosure note (for example that the guide is based on documentation, not a controlled test), keep its meaning as one short italic line placed directly before "## My Take", dated "Updated {today}". Keep the note honest: say only what is true of this guide.
 
 ## Re-check the facts
 - Use web search (at most 3 searches) to re-check time-sensitive claims in this post: prices, plan limits, feature availability, menu paths, setting names. Prefer official documentation.
-- Correct anything that is outdated or wrong. If something matters but you cannot confirm it, say it was true "at the time of writing" or remove it. Never invent a number, feature, price, quote or date.
+- Correct anything that is outdated or wrong. If something matters but you cannot confirm it, say it was true "at the time of writing" or remove it. Never invent a number, feature, price, quote or date. Recompute every total, multiple and percentage you state (for example monthly vs annual price differences) from the figures you cite, and use the exact result - do not round a 25% difference into "roughly 40%".
 
 ## Clean up
 - Never claim firsthand experience or testing that did not happen ("I tested", "in my experience"). If the original implies it, recast the sentence as analysis of what the official documentation and public reports say.
@@ -1776,6 +1778,8 @@ def check_rewrite_post(new_md: str, original_html: str) -> str | None:
     new_words = len(re.findall(r"\b[\w'’-]+\b", re.sub(r"\(https?://[^)]+\)|https?://\S+", " ", new_md)))
     if new_words < max(450, int(old_words * 0.75)):
         return f"원본보다 너무 짧음({new_words}단어, 원본 {old_words}단어)"
+    if new_words > int(old_words * 1.4):
+        return f"원본보다 너무 길어짐({new_words}단어, 원본 {old_words}단어)"
     missing = [u for u in _html_image_urls(original_html) if u not in new_md]
     if missing:
         return f"원본 이미지가 빠짐: {missing[:2]}"
