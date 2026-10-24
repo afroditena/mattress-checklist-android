@@ -1594,7 +1594,7 @@ def _blogger_get(url: str, access_token: str) -> dict:
         return json.loads(resp.read())
 
 
-def audit_blog_posts() -> None:
+def audit_blog_posts(blog_id: str | None = None) -> None:
     """읽기 전용 점검(RUN_BLOG_AUDIT=true): new-maind(BLOGGER_BLOG_ID)에 실제로
     올라가 있는 글/페이지를 전부 읽어서 언어·길이·발행일·제목 중복·외부링크
     수를 로그로 찍는다. 아무것도 수정/삭제하지 않는다. 2026-10-02, 애드센스
@@ -1607,7 +1607,7 @@ def audit_blog_posts() -> None:
         print("Blogger 인증 정보가 없어 점검을 건너뜁니다.")
         return
     access_token = get_google_access_token()
-    base = f"https://www.googleapis.com/blogger/v3/blogs/{BLOGGER_BLOG_ID}"
+    base = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id or BLOGGER_BLOG_ID}"
 
     info = _blogger_get(base, access_token)
     print(f"블로그: {info.get('name')} ({info.get('url')})")
@@ -1636,7 +1636,11 @@ def audit_blog_posts() -> None:
         ext_links = len(re.findall(r'href=["\']https?://(?!(?:[\w.-]*blogspot\.com|[\w.-]*github\.io))', body))
         imgs = len(re.findall(r"<img\b", body))
         coupang = "Y" if ("coupang" in body.lower() or "쿠팡" in body) else "-"
-        rows.append((p.get("published", ""), p.get("status", ""), lang, chars, imgs, ext_links, coupang, p.get("title", ""), p.get("url", ""), p.get("id", "")))
+        h2s = re.findall(r"<h[23][^>]*>(.*?)</h[23]>", body, re.IGNORECASE | re.DOTALL)
+        last_h = re.sub(r"<[^>]+>", "", h2s[-1]).strip()[:24] if h2s else "-"
+        tables = len(re.findall(r"<table\b", body))
+        rows.append((p.get("published", ""), p.get("status", ""), lang, chars, imgs, ext_links, coupang,
+                     f"{p.get('title', '')} [표={tables}, 마지막 소제목={last_h}]", p.get("url", ""), p.get("id", "")))
     rows.sort()
     for pub, status, lang, chars, imgs, ext, cp, title, url, pid in rows:
         print(f"{pub[:16]} | {status:5} | {lang} | {chars:5}자 | img={imgs} | ext={ext} | cp={cp} | id={pid} | {title} | {url}")
@@ -2284,9 +2288,10 @@ def _run_arm(label: str, fn) -> bool:
 
 
 def main() -> None:
-    if os.environ.get("RUN_BLOG_AUDIT") == "true":
+    if os.environ.get("RUN_BLOG_AUDIT") in ("true", "second"):
         # 읽기 전용 점검 모드: Claude API를 쓰지 않으므로 키 검사보다 먼저 처리한다.
-        audit_blog_posts()
+        # "second"면 Simple Tech Fix(TRENDS_BLOG_ID)를 점검한다.
+        audit_blog_posts(TRENDS_BLOG_ID if os.environ.get("RUN_BLOG_AUDIT") == "second" else None)
         return
 
     if os.environ.get("RUN_TRENDS_PROBE") == "true":

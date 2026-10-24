@@ -30,7 +30,8 @@ on:
           true로 실행하면 평소 발행을 건너뛰고, new-maind Blogger에 실제로
           올라가 있는 글/페이지 목록(언어·길이·제목 중복 등)을 로그로만
           출력하는 읽기 전용 점검을 함(audit_blog_posts() 참고). 아무것도
-          수정하지 않음. 평소엔 항상 false로 두면 됨.
+          수정하지 않음. "second"로 실행하면 같은 점검을 Simple Tech Fix
+          블로그에 대해 함. 평소엔 항상 false로 두면 됨.
         required: false
         default: "false"
       trends_probe:
