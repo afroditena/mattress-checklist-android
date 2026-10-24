@@ -1778,7 +1778,8 @@ def check_rewrite_post(new_md: str, original_html: str) -> str | None:
     new_words = len(re.findall(r"\b[\w'’-]+\b", re.sub(r"\(https?://[^)]+\)|https?://\S+", " ", new_md)))
     if new_words < max(450, int(old_words * 0.75)):
         return f"원본보다 너무 짧음({new_words}단어, 원본 {old_words}단어)"
-    if new_words > int(old_words * 1.4):
+    # 필수로 들어가는 My Take(약 250~400단어)만으로도 짧은 글은 1.3배 넘게 늘어난다.
+    if new_words > int(old_words * 1.6):
         return f"원본보다 너무 길어짐({new_words}단어, 원본 {old_words}단어)"
     missing = [u for u in _html_image_urls(original_html) if u not in new_md]
     if missing:
