@@ -521,7 +521,10 @@ def call_claude(prompt: str, enable_web_search: bool = False) -> str:
             prev_was_text = False
     if not groups:
         sys.exit("응답에 텍스트 콘텐츠가 없습니다.")
-    return "\n\n".join("".join(g) for g in groups)
+    text = "\n\n".join("".join(g) for g in groups)
+    # 웹 검색 인용이 <cite index="..">문장</cite> 마크업으로 섞여 나오는 경우가 있다(실제로
+    # 발행된 글 본문에 그대로 남음). 태그만 지우고 안쪽 문장은 살린다.
+    return re.sub(r"</?cite\b[^>]*>", "", text)
 
 
 def _find_field_match(text: str, label: str) -> re.Match | None:
