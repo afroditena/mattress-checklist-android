@@ -1680,6 +1680,243 @@ def audit_blog_posts(blog_id: str | None = None) -> None:
         print(f"id={pg.get('id')} | {pg.get('title')} | {pg.get('url')} | {excerpt}")
 
 
+# 2026-10-24: 사용자 요청으로 Simple Tech Fix(TRENDS_BLOG_ID)에 이미 올라간 공개(LIVE) 글을
+# 새 글쓰기 지침(원래 어투 유지, 사실 재확인, 마지막 섹션 "My Take")으로 다시 쓴다.
+# 되돌릴 수 있도록 2단계로 나눈다 - "dry"는 원본을 백업하고 새 원고를 파일로만 저장하며
+# Blogger는 건드리지 않는다. "apply"는 검사를 통과해 저장된 원고만 Blogger에 반영하고,
+# 그 사이에 글이 바뀌었으면(백업과 현재 본문이 다르면) 덮어쓰지 않고 건너뛴다.
+# 초안(DRAFT) 상태인 글은 건드리지 않는다.
+REWRITE_STATE_FILE = PROJECT_DIR / "data" / "rewrite_second_blog_state.json"
+REWRITE_BACKUP_DIR = PROJECT_DIR / "data" / "backups_second_blog"
+REWRITE_DRAFT_DIR = PROJECT_DIR / "data" / "rewrite_drafts_second_blog"
+REWRITE_MAX_ATTEMPTS = 2
+REWRITE_FIRSTHAND_PATTERN = re.compile(
+    r"\b(i tested|i tried|i personally|in my experience|when i (?:used|tested|tried|ran)|my own testing|"
+    r"i['’]ve been using|i spent \w+ (?:hours|days|weeks) (?:with|testing|using))\b",
+    re.IGNORECASE,
+)
+
+
+def _rewrite_load_state() -> dict:
+    try:
+        state = json.loads(REWRITE_STATE_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = {}
+    for key in ("applied", "failed"):
+        state.setdefault(key, {})
+    return state
+
+
+def _rewrite_save_state(state: dict) -> None:
+    REWRITE_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    REWRITE_STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _html_words(html_text: str) -> int:
+    import html as html_lib
+
+    text = html_lib.unescape(re.sub(r"<[^>]+>", " ", html_text))
+    return len(re.findall(r"\b[\w'’-]+\b", text))
+
+
+def _html_image_urls(html_text: str) -> list[str]:
+    return re.findall(r"<img\b[^>]*?\bsrc=[\"']([^\"']+)[\"']", html_text, re.IGNORECASE)
+
+
+def build_rewrite_prompt(title: str, original_html: str) -> str:
+    return f"""You are revising one existing post on Simple Tech Fix, an English-language blog about work tools and AI tools for a US audience. The post is already published. Rewrite it to meet the blog's current writing standards while keeping the author's voice.
+
+Post title (do not change it, do not output it): {title}
+
+Original post (HTML):
+<<<ORIGINAL
+{original_html}
+ORIGINAL>>>
+
+## Voice - keep it the author's
+- Keep the original author's person (I / you / we), register, vocabulary level and sentence rhythm. Do not make it more formal, more chatty, or more polished than the original. Do not introduce a new persona.
+- Where an original sentence is clear and accurate, keep it word for word. Change a sentence only to fix an error, cut padding, or sharpen a vague claim.
+
+## Keep the structure and the assets
+- Same topic, same section order, same H2 headings unless a heading is generic filler. Keep every image exactly as a markdown image line (![alt](url) with the original URL), keep every link, keep tables as markdown tables.
+- Length about the same as the original (within roughly 20%). Do not pad.
+
+## Re-check the facts
+- Use web search (at most 3 searches) to re-check time-sensitive claims in this post: prices, plan limits, feature availability, menu paths, setting names. Prefer official documentation.
+- Correct anything that is outdated or wrong. If something matters but you cannot confirm it, say it was true "at the time of writing" or remove it. Never invent a number, feature, price, quote or date.
+
+## Clean up
+- Never claim firsthand experience or testing that did not happen ("I tested", "in my experience"). If the original implies it, recast the sentence as analysis of what the official documentation and public reports say.
+- Remove stock phrases: "In today's fast-paced world", "It's important to note", "Let's dive in", "game-changer", "unlock", "seamlessly", "In conclusion", "The key point is", "What matters most is".
+- Vary sentence length. Keep paragraphs to 1-4 sentences. Replace vague modifiers with concrete facts.
+- Any closing section such as "What I Learned While Writing This", "Wrap-Up" or "Before you send..." is merged into the body or into My Take. An FAQ, if present, stays and comes before My Take.
+
+## Ending - required
+The LAST section must be "## My Take": 3-5 short paragraphs of the writer's own considered analysis.
+- Say clearly that it is opinion ("I think", "My read") and give the reason behind each opinion.
+- Make it a concrete judgment about what this means or what a reader should do or watch for - never "there are pros and cons".
+- Concede one fair point from the other side.
+- Legal, medical or financial angles: say plainly you are not a professional.
+- End on the take itself. No sign-off, no call to action, no summary.
+
+## Output format
+Output only the markdown body. No title line, no front matter, no code fences, no preamble or notes. No H1. Start with the opening paragraph. Use ## for sections."""
+
+
+def check_rewrite_post(new_md: str, original_html: str) -> str | None:
+    """재작성 원고 검사. 문제가 있으면 이유 문자열, 없으면 None."""
+    if "<cite" in new_md.lower():
+        return "인용 태그가 남아 있음"
+    headings = re.findall(r"^##\s+(.+?)\s*$", new_md, re.MULTILINE)
+    if not headings or headings[-1].strip().lower() != "my take":
+        return "마지막 섹션이 'My Take'가 아님"
+    if re.search(r"^#\s+\S", new_md, re.MULTILINE):
+        return "H1이 포함됨"
+    old_words = _html_words(original_html)
+    new_words = len(re.findall(r"\b[\w'’-]+\b", re.sub(r"\(https?://[^)]+\)|https?://\S+", " ", new_md)))
+    if new_words < max(450, int(old_words * 0.75)):
+        return f"원본보다 너무 짧음({new_words}단어, 원본 {old_words}단어)"
+    missing = [u for u in _html_image_urls(original_html) if u not in new_md]
+    if missing:
+        return f"원본 이미지가 빠짐: {missing[:2]}"
+    if re.search(r"[가-힣]", new_md):
+        return "한글이 섞임"
+    hit = REWRITE_FIRSTHAND_PATTERN.search(new_md)
+    if hit:
+        return f"직접 겪은 듯한 표현이 있음: {hit.group(0)!r}"
+    return None
+
+
+def _rewrite_clean_output(text: str) -> str:
+    text = text.strip()
+    fence = re.match(r"^```(?:markdown|md)?\s*\n(.*?)\n```$", text, re.DOTALL)
+    if fence:
+        text = fence.group(1).strip()
+    return re.sub(r"\A#\s+[^\n]*\n+", "", text)
+
+
+def _rewrite_to_html(body_md: str) -> str:
+    if _markdown is not None:
+        return _markdown.markdown(body_md, extensions=["tables"])
+    return markdown_to_html(body_md)
+
+
+def _blogger_patch(url: str, payload: dict, access_token: str) -> dict:
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        method="PATCH",
+        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json; charset=utf-8"},
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return json.loads(resp.read())
+
+
+def _rewrite_live_posts(access_token: str) -> list[dict]:
+    base = f"https://www.googleapis.com/blogger/v3/blogs/{TRENDS_BLOG_ID}/posts"
+    posts, page_token = [], ""
+    while True:
+        qs = "fetchBodies=true&maxResults=50&orderBy=published&status=live"
+        if page_token:
+            qs += f"&pageToken={urllib.parse.quote(page_token)}"
+        data = _blogger_get(f"{base}?{qs}", access_token)
+        posts.extend(data.get("items", []) or [])
+        page_token = data.get("nextPageToken", "")
+        if not page_token:
+            break
+    posts.sort(key=lambda p: p.get("published", ""))
+    return posts
+
+
+def rewrite_second_blog(mode: str) -> None:
+    """RUN_REWRITE_SECOND_BLOG=dry|apply. 위 주석 참고."""
+    if not blogger_configured():
+        print("Blogger 인증 정보가 없어 건너뜁니다.")
+        return
+    try:
+        limit = int(os.environ.get("REWRITE_LIMIT") or "3")
+    except ValueError:
+        limit = 3
+    wanted = [x.strip() for x in (os.environ.get("REWRITE_POST_IDS") or "").split(",") if x.strip()]
+    access_token = get_google_access_token()
+    posts = _rewrite_live_posts(access_token)
+    if wanted:
+        posts = [p for p in posts if p.get("id") in wanted]
+    print(f"공개(LIVE) 글 {len(posts)}개 대상, 모드={mode}, 한 번에 최대 {limit}개")
+    state = _rewrite_load_state()
+
+    done = 0
+    for post in posts:
+        if done >= limit:
+            break
+        pid, title = post["id"], post.get("title", "")
+        if pid in state["applied"]:
+            continue
+        draft_path = REWRITE_DRAFT_DIR / f"{pid}.json"
+
+        if mode == "dry":
+            if draft_path.exists():
+                continue
+            if state["failed"].get(pid, {}).get("attempts", 0) >= REWRITE_MAX_ATTEMPTS:
+                continue
+            original = post.get("content", "") or ""
+            REWRITE_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+            backup_path = REWRITE_BACKUP_DIR / f"{pid}.json"
+            if not backup_path.exists():
+                backup_path.write_text(
+                    json.dumps({"id": pid, "title": title, "url": post.get("url"), "published": post.get("published"),
+                                "updated": post.get("updated"), "content": original}, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            print(f"[재작성 시도] {title} ({pid})")
+            new_md = _rewrite_clean_output(call_claude(build_rewrite_prompt(title, original), enable_web_search=True))
+            problem = check_rewrite_post(new_md, original)
+            if problem:
+                entry = state["failed"].setdefault(pid, {"attempts": 0})
+                entry["attempts"] += 1
+                entry["reason"] = problem
+                _rewrite_save_state(state)
+                print(f"  검사 불합격, 저장하지 않음: {problem}")
+                done += 1
+                continue
+            REWRITE_DRAFT_DIR.mkdir(parents=True, exist_ok=True)
+            draft_path.write_text(
+                json.dumps({"id": pid, "title": title, "url": post.get("url"), "body_md": new_md}, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            state["failed"].pop(pid, None)
+            _rewrite_save_state(state)
+            print(f"  원고 저장 완료({len(new_md)}자) - Blogger는 건드리지 않음")
+            done += 1
+
+        elif mode == "apply":
+            if not draft_path.exists():
+                continue
+            backup_path = REWRITE_BACKUP_DIR / f"{pid}.json"
+            try:
+                backup = json.loads(backup_path.read_text(encoding="utf-8"))
+                draft = json.loads(draft_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as e:
+                print(f"[건너뜀] {title}: 백업/원고 파일을 읽지 못함: {e}")
+                continue
+            if (post.get("content", "") or "") != backup["content"]:
+                print(f"[건너뜀] {title}: 백업 이후 Blogger 본문이 바뀌어 덮어쓰지 않음")
+                continue
+            if check_rewrite_post(draft["body_md"], backup["content"]):
+                print(f"[건너뜀] {title}: 저장된 원고가 검사를 통과하지 못함")
+                continue
+            result = _blogger_patch(
+                f"https://www.googleapis.com/blogger/v3/blogs/{TRENDS_BLOG_ID}/posts/{pid}",
+                {"content": _rewrite_to_html(draft["body_md"])},
+                access_token,
+            )
+            state["applied"][pid] = {"title": title, "url": result.get("url", post.get("url"))}
+            _rewrite_save_state(state)
+            print(f"[반영 완료] {title}: {result.get('url')}")
+            done += 1
+    print(f"이번 실행에서 처리한 글: {done}개")
+
+
 # 2026-10-11: 사용자 요청으로 구글 트렌드(미국) 급상승 검색어 중 검색량 1만+ 항목을
 # 골라 글을 쓰는 "trends" 갈래를 추가한다. 대상 블로그는 사용자가 지정한
 # Blogger 블로그 ID이며(비밀값이 아니라 대시보드 URL에 그대로 보이는 값),
@@ -2300,6 +2537,10 @@ def main() -> None:
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         sys.exit("ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.")
+
+    if os.environ.get("RUN_REWRITE_SECOND_BLOG") in ("dry", "apply"):
+        rewrite_second_blog(os.environ["RUN_REWRITE_SECOND_BLOG"])
+        return
 
     if os.environ.get("RUN_FIX_KNOWN_POST_TITLE") == "true":
         # 일회성 유지보수 모드: 정상 발행 흐름을 타지 않고 이 작업만 하고 끝낸다

@@ -34,6 +34,22 @@ on:
           블로그에 대해 함. 평소엔 항상 false로 두면 됨.
         required: false
         default: "false"
+      rewrite_second_blog:
+        description: >-
+          "dry"면 Simple Tech Fix의 공개(LIVE) 글 원본을 백업하고 새 지침으로 다시 쓴
+          원고를 파일로만 저장함(Blogger는 건드리지 않음). "apply"면 검사를 통과해
+          저장된 원고를 Blogger 글에 반영함(rewrite_second_blog() 참고).
+          평소엔 항상 비워 둠.
+        required: false
+        default: ""
+      rewrite_post_ids:
+        description: "rewrite_second_blog 대상 글 ID를 쉼표로 지정(비우면 목록 순서대로)."
+        required: false
+        default: ""
+      rewrite_limit:
+        description: "rewrite_second_blog가 한 번에 처리할 글 수(기본 3)."
+        required: false
+        default: "3"
       trends_probe:
         description: >-
           true로 실행하면 평소 발행을 건너뛰고, 구글 트렌드(US) 피드와 trends
@@ -94,6 +110,9 @@ jobs:
           RUN_FIX_KNOWN_POST_TITLE: ${{ github.event.inputs.fix_known_post_title || 'false' }}
           RUN_BLOG_AUDIT: ${{ github.event.inputs.blog_audit || 'false' }}
           RUN_TRENDS_PROBE: ${{ github.event.inputs.trends_probe || 'false' }}
+          RUN_REWRITE_SECOND_BLOG: ${{ github.event.inputs.rewrite_second_blog || '' }}
+          REWRITE_POST_IDS: ${{ github.event.inputs.rewrite_post_ids || '' }}
+          REWRITE_LIMIT: ${{ github.event.inputs.rewrite_limit || '3' }}
           FORCE_NICHE_CLUSTER: ${{ github.event.inputs.force_niche_cluster || '' }}
           # 스케줄(cron) 실행이면 어느 cron이 켰는지로 갈래를 자동 결정하고
           # (아래 4개 cron 중 "0 22 * * *"만 new-maind 전용, 나머지 3개는
@@ -137,6 +156,8 @@ jobs:
                    auto-blog-autopilot/data/used_topic_ids_second_blog.json \
                    auto-blog-autopilot/data/used_topic_ids_trends.json \
                    auto-blog-autopilot/data/used_topic_ids_trends_kr.json \
+                   auto-blog-autopilot/data/backups_second_blog auto-blog-autopilot/data/rewrite_drafts_second_blog \
+                   auto-blog-autopilot/data/rewrite_second_blog_state.json \
                    auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json; do
             if [ -e "$f" ] || git cat-file -e "HEAD:$f" 2>/dev/null; then
               git add "$f"
