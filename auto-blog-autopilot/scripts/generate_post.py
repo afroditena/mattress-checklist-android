@@ -605,6 +605,13 @@ def parse_niche_output(text: str, fallback_title: str = "") -> tuple[str, str, s
     return title, tags, keyword, sources, body
 
 
+def parse_image_sources(text: str) -> list[str]:
+    """트렌드 글 출력의 IMAGE_SOURCES 라인에서 캡처 대상 공식/1차 페이지 URL을 뽑는다.
+    SOURCES(본문 인용 출처)와 달리, 이쪽은 스크린샷용으로만 쓴다(없으면 빈 목록)."""
+    raw = _find_field(text, "IMAGE_SOURCES")
+    return [u.rstrip(".,;)]*_\"'") for u in re.findall(r"https?://[^\s|\]\[<>]+", raw)]
+
+
 # 4개 포맷 프롬프트 빌더가 공통으로 요구하는 출력 필드 형식. TITLE/TAGS/
 # KEYWORD는 예전 포맷과 같은 자리에, SOURCES(파이프로 구분된 실제 인용
 # URL 2~4개)가 새로 추가됐다 - 이 URL은 본문에서 공식 출처로 인용될 뿐
@@ -2043,6 +2050,25 @@ TRENDS_PARTISAN_PATTERN = re.compile(
     r"\b(elections?|polls?|polling|campaign|candidates?|ballots?|impeach\w*|midterms?|primary|primaries)\b|선거|후보|지지율|여론|탄핵|대선|총선",
     re.IGNORECASE,
 )
+# 2026-11-05 애드센스 "가치가 별로 없는 콘텐츠" 재지적 대응: 경제 키워드("trade", "deal", "ad" 등)가
+# 제목·헤드라인에 섞여 범위 필터를 통과하던 스포츠·연예 검색어(실제로 "kyrie irving trade",
+# "삼성 KIA 플레이오프", "dakota johnson" 등이 Simple Tech Fix/new-maind에 발행됐다)를 명시적으로 뺀다.
+# 이 패턴에 걸리면 다른 키워드가 맞아도 건너뛴다(keyword_fit보다 먼저 판정).
+TRENDS_OFFTOPIC_PATTERN = re.compile(
+    r"\b(nba|nfl|mlb|nhl|ncaa|wnba|mls|ufc|pga|atp|wta|f1|formula 1|premier league|la liga|serie a|bundesliga|"
+    r"champions league|world cup|super ?bowl|playoffs?|postseason|preseason|regular season|"
+    r"trade (?:talk|talks|rumou?rs?|deadline|request|block|package|market)|traded to|free ag(?:ent|ency)|waivers?|"
+    r"starting lineup|box score|quarterbacks?|touchdowns?|home runs?|rebounds?|assists?|rushing yards|points per game|"
+    r"head coach|coaching (?:change|hire|search)|actor|actress|singer|rapper|boy ?friend|girl ?friend|dating|"
+    r"break-?up|splits? from|divorce|engaged|wedding|red carpet|box office|film premiere|new album|world tour|"
+    r"concert tour|new season|reality show|grammys?|oscars?|emmys?|golden globe|met gala|kardashian|taylor swift)\b",
+    re.IGNORECASE,
+)
+TRENDS_OFFTOPIC_PATTERN_KO = re.compile(
+    r"농구|야구|축구|배구|프로야구|프로축구|k리그|한국시리즈|플레이오프|포스트시즌|트레이드|이적설|방출|"
+    r"드래프트|올림픽|월드컵|홈런|실책|선발 등판|감독 선임|감독 경질|배우|가수|아이돌|걸그룹|보이그룹|"
+    r"음원|콘서트|드라마|예능|열애|결별|이혼설|재결합|팬미팅|컴백|데뷔"
+)
 TRENDS_BLOCKED_PATTERN_KO = re.compile(
     r"사망|숨져|숨진|참사|살인|피살|폭행|성폭행|성범죄|자살|극단적|실종|장례|부고|추락|화재|붕괴|흉기|테러|납치|희생자"
 )
@@ -2108,6 +2134,9 @@ def select_trend_topic(
             continue
         if TRENDS_PARTISAN_PATTERN.search(text):
             print(f"당파적 정치 이슈라 건너뜀: {it['title']}")
+            continue
+        if TRENDS_OFFTOPIC_PATTERN.search(text) or TRENDS_OFFTOPIC_PATTERN_KO.search(text):
+            print(f"스포츠·연예 등 분석 가치가 낮은 주제라 건너뜀: {it['title']}")
             continue
         keyword_fit = bool(TRENDS_TECH_PATTERN.search(text) or TRENDS_SCOPE_EXTRA_PATTERN.search(text))
         if TRENDS_LOW_VALUE_PATTERN.search(text) or TRENDS_LOW_VALUE_PATTERN_KO.search(text):
@@ -2178,6 +2207,7 @@ TITLE: (a specific, plain-English title, under 70 characters, no clickbait, no c
 TAGS: (3-5 comma-separated tags)
 KEYWORD: (the trending search term)
 SOURCES: (2-4 reputable news or primary-source URLs you actually used, separated by " | ")
+IMAGE_SOURCES: (0-3 official or primary web-page URLs that are safe to screenshot, separated by " | "; leave empty if none fit)
 ---
 (the post body in Markdown, following the structure above)"""
 
@@ -2189,6 +2219,7 @@ TITLE: (한국 독자에게 자연스러운 제목, 50자 이내, 낚시성 문�
 TAGS: (쉼표로 구분한 태그 3~5개, 한국어)
 KEYWORD: (급상승 검색어)
 SOURCES: (실제로 참고한 신뢰할 만한 언론·1차 출처 URL 2~4개, " | "로 구분)
+IMAGE_SOURCES: (캡처해도 되는 공식/1차 페이지 URL 0~3개, " | "로 구분, 없으면 비움)
 ---
 (위 구조를 따르는 마크다운 본문 - 한국어)"""
 
@@ -2271,7 +2302,11 @@ def build_trend_take_prompt_ko(topic: dict, recent_titles: list[str]) -> str:
 ## 정직성 규칙
 
 - 직접 써 보거나 겪은 적 없는 일을 겪은 것처럼 쓰지 않는다("직접 써 봤더니", "제 경험상").
-- 이미지나 이미지 링크를 넣지 않는다.
+- 본문에 이미지 마크다운이나 이미지 링크를 직접 넣지 않는다. 대신 아래 IMAGE_SOURCES에 캡처할 공식 페이지를 적는다.
+
+## 이미지
+
+캡처해서 쓸 수 있는, 주제와 직접 관련된 공식·1차 웹페이지 1~3개를 아래 IMAGE_SOURCES에 적으세요 - 회사 공식 발표·제품 페이지, 정부·규제기관 페이지, 법원·기관 자료, 연구기관 페이지 등. 뉴스 기사, 유료·로그인 페이지, SNS는 적지 마세요. 마땅한 페이지가 없으면 비워 둡니다.
 
 {HUMAN_STYLE_BLOCK_KO}
 
@@ -2333,7 +2368,14 @@ This post must add something a reader cannot get from the headline alone. Do not
 - Replace modifiers with concrete facts and numbers. Drop subjects and repeated objects that context already supplies.
 - Never use: "The reason is simple", "In conclusion", "The key point is", "What matters most is", "It can be said that", "innovative", "meaningful", "together". Do not force exclamations or ellipses.
 - Write like one person organizing their own thinking and handing it over: tidy, but not too smooth.
-- Do not add images or image links.
+- Open on a concrete, specific detail or an honest reaction - not a generic scene-set. Sound like someone who read the sources and formed a view, not a summary engine.
+- Use everyday contractions ("it's", "they're", "doesn't"). An occasional short aside in your own voice is fine; corporate neutrality is not the goal.
+- Don't let the section headings read like a filled-in template. The prose under each heading should flow as something you chose to say, and name real specifics (companies, dates, numbers) rather than vague categories.
+- Do not put image markdown or image links in the body yourself. List official pages to screenshot under IMAGE_SOURCES instead.
+
+## Images
+
+Under IMAGE_SOURCES below, list 1-3 official or primary web pages that are directly relevant and safe to screenshot: a company's own announcement or product page, a regulator or government page, a court or agency filing, or a research institution's page. Do NOT list news articles, paywalled pages, social media, or anything behind a login. If no such page fits the story, leave IMAGE_SOURCES empty.
 
 {OUTPUT_FORMAT_BLOCK_TRENDS}
 """
@@ -2455,9 +2497,24 @@ def _run_generation(
     elif manual:
         photo = find_stock_photo(image_query or keyword or fallback_title)
         body = build_image_block(photo) + body
+    elif image_mode == "trend":
+        # 트렌드 글(2026-11-05~): 모델이 IMAGE_SOURCES로 준 공식·1차 페이지를 직접 캡처해 싣는다.
+        # 뉴스 기사 캡처(저작권)나 무관한 스톡사진을 피하려고 공식 페이지만 쓰고, 하나도 캡처하지
+        # 못했을 때만 주제에 맞는 Unsplash 사진 1장을 대표 이미지로 대신 쓴다. 범위를 경제·과학·
+        # 소비자·정책·테크로 좁혔으므로 회사/정부/규제기관/연구기관 공식 페이지가 대개 존재한다.
+        img_sources = parse_image_sources(raw_output)
+        photos = build_screenshot_photos(img_sources, slug) if img_sources else []
+        if not photos:
+            stock = find_stock_photo(keyword or fallback_title)
+            if stock:
+                photos = [dict(stock, kind="unsplash")]
+        if photos:
+            body = distribute_images_into_body(body, photos, block_builder=build_niche_image_block)
+        else:
+            print("트렌드 글 이미지: 공식 페이지 캡처와 스톡 사진 모두 없어 이미지 없이 발행합니다.")
     elif image_mode == "none":
         # 뉴스 기사 페이지를 캡처해 싣는 것은 저작권상 부적절하고, 사람 이름 같은 검색어에
-        # 무관한 스톡사진을 붙이는 것도 부적절해서 이미지 없이 발행한다(trends 갈래).
+        # 무관한 스톡사진을 붙이는 것도 부적절해서 이미지 없이 발행한다.
         pass
     else:
         # 새 니치: SOURCES로 받은 공식 페이지들을 직접 캡처해서 실제 화면
@@ -2651,7 +2708,7 @@ def main() -> None:
                 niche_topic=topic,
                 blog_id=TRENDS_BLOG_ID,
                 used_ids_file=TRENDS_USED_FILE,
-                image_mode="none",
+                image_mode="trend",
                 skip_marker="SKIP",
                 body_check=check_trend_post,
             )
@@ -2672,7 +2729,7 @@ def main() -> None:
                 topic["keyword"],
                 niche_topic=topic,
                 used_ids_file=TRENDS_KR_USED_FILE,
-                image_mode="none",
+                image_mode="trend",
                 skip_marker="SKIP",
                 body_check=lambda b: check_trend_post(b, "ko"),
             )
