@@ -34,6 +34,17 @@ on:
           블로그에 대해 함. 평소엔 항상 false로 두면 됨.
         required: false
         default: "false"
+      add_images_second_blog:
+        description: >-
+          true면 Simple Tech Fix의 공개 글 중 이미지가 하나도 없는 글에 주제에 맞는
+          Unsplash 사진 1장을 대표 이미지로 넣음(add_images_second_blog() 참고,
+          Claude API 미사용). 평소엔 false.
+        required: false
+        default: "false"
+      add_images_limit:
+        description: "add_images_second_blog가 한 번에 처리할 글 수(기본 10)."
+        required: false
+        default: "10"
       rewrite_second_blog:
         description: >-
           "dry"면 Simple Tech Fix의 공개(LIVE) 글 원본을 백업하고 새 지침으로 다시 쓴
@@ -110,6 +121,8 @@ jobs:
           RUN_FIX_KNOWN_POST_TITLE: ${{ github.event.inputs.fix_known_post_title || 'false' }}
           RUN_BLOG_AUDIT: ${{ github.event.inputs.blog_audit || 'false' }}
           RUN_TRENDS_PROBE: ${{ github.event.inputs.trends_probe || 'false' }}
+          RUN_ADD_IMAGES_SECOND_BLOG: ${{ github.event.inputs.add_images_second_blog || 'false' }}
+          ADD_IMAGES_LIMIT: ${{ github.event.inputs.add_images_limit || '10' }}
           RUN_REWRITE_SECOND_BLOG: ${{ github.event.inputs.rewrite_second_blog || '' }}
           REWRITE_POST_IDS: ${{ github.event.inputs.rewrite_post_ids || '' }}
           REWRITE_LIMIT: ${{ github.event.inputs.rewrite_limit || '3' }}
@@ -158,6 +171,7 @@ jobs:
                    auto-blog-autopilot/data/used_topic_ids_trends_kr.json \
                    auto-blog-autopilot/data/backups_second_blog auto-blog-autopilot/data/rewrite_drafts_second_blog \
                    auto-blog-autopilot/data/rewrite_second_blog_state.json \
+                   auto-blog-autopilot/data/add_images_second_blog_state.json \
                    auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json; do
             if [ -e "$f" ] || git cat-file -e "HEAD:$f" 2>/dev/null; then
               git add "$f"

@@ -1840,6 +1840,68 @@ def _rewrite_live_posts(access_token: str) -> list[dict]:
     return posts
 
 
+# 2026-11-05 일회성 유지보수: 과거에 발행된 트렌드 글은 이미지가 하나도 없다(발행 당시 image_mode="none").
+# 사용자 요청으로, 이미 올라간 공개 글에 주제에 맞는 Unsplash 사진 1장을 대표 이미지로 넣는다.
+# Claude API를 쓰지 않아 비용이 거의 없고, 이미 이미지가 있거나 한 번 처리한 글은 건너뛴다.
+ADD_IMAGES_STATE_FILE = PROJECT_DIR / "data" / "add_images_second_blog_state.json"
+ADD_IMAGES_GENERIC_LABELS = {"how to fix it", "2026", "ai", "tech", "news"}
+
+
+def _add_images_load_done() -> set:
+    try:
+        return set(json.loads(ADD_IMAGES_STATE_FILE.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return set()
+
+
+def add_images_second_blog() -> None:
+    """RUN_ADD_IMAGES_SECOND_BLOG=true: Simple Tech Fix(TRENDS_BLOG_ID)의 공개 글 중 이미지가
+    하나도 없는 글에 주제에 맞는 Unsplash 사진 1장을 대표 이미지로 넣는다. 라벨(태그)로 영어
+    검색어를 만들어 사진을 찾고, 사진 블록을 글 맨 위에 붙여 Blogger 글을 PATCH 한다. 이미
+    이미지가 있거나 한 번 처리한 글은 건너뛴다. GitHub Pages 미러는 건드리지 않는다(noindex)."""
+    if not blogger_configured():
+        print("Blogger 인증 정보가 없어 건너뜁니다.")
+        return
+    try:
+        limit = int(os.environ.get("ADD_IMAGES_LIMIT") or "10")
+    except ValueError:
+        limit = 10
+    access_token = get_google_access_token()
+    posts = _rewrite_live_posts(access_token)
+    done = _add_images_load_done()
+    changed = []
+    for post in posts:
+        if len(changed) >= limit:
+            break
+        pid = post["id"]
+        content = post.get("content", "") or ""
+        if pid in done or "<img" in content.lower():
+            continue
+        labels = [l for l in (post.get("labels") or []) if l]
+        picks = [l for l in labels if l.lower() not in ADD_IMAGES_GENERIC_LABELS][:2] or labels[:2]
+        query = " ".join(picks).strip() or post.get("title", "technology")
+        photo = find_stock_photo(query)
+        if not photo:
+            print(f"[건너뜀] {post.get('title')}: '{query}' 스톡 사진을 찾지 못함")
+            continue
+        image_html = markdown_to_html(build_image_block(photo))
+        try:
+            result = _blogger_patch(
+                f"https://www.googleapis.com/blogger/v3/blogs/{TRENDS_BLOG_ID}/posts/{pid}",
+                {"content": image_html + content},
+                access_token,
+            )
+        except (urllib.error.URLError, urllib.error.HTTPError) as e:
+            print(f"[건너뜀] {post.get('title')}: Blogger PATCH 실패: {e}")
+            continue
+        done.add(pid)
+        changed.append(post.get("title"))
+        ADD_IMAGES_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        ADD_IMAGES_STATE_FILE.write_text(json.dumps(sorted(done), ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[이미지 추가] {post.get('title')} (검색어='{query}'): {result.get('url')}")
+    print(f"이번 실행에서 이미지를 넣은 공개 글: {len(changed)}개")
+
+
 def rewrite_second_blog(mode: str) -> None:
     """RUN_REWRITE_SECOND_BLOG=dry|apply. 위 주석 참고."""
     if not blogger_configured():
@@ -2591,6 +2653,11 @@ def main() -> None:
         # 읽기 전용 점검 모드: Claude API를 쓰지 않으므로 키 검사보다 먼저 처리한다.
         # "second"면 Simple Tech Fix(TRENDS_BLOG_ID)를 점검한다.
         audit_blog_posts(TRENDS_BLOG_ID if os.environ.get("RUN_BLOG_AUDIT") == "second" else None)
+        return
+
+    if os.environ.get("RUN_ADD_IMAGES_SECOND_BLOG") == "true":
+        # 일회성: 이미지 없는 공개 글에 스톡 사진을 넣는다. Claude API 미사용이라 키 검사보다 먼저 처리.
+        add_images_second_blog()
         return
 
     if os.environ.get("RUN_TRENDS_PROBE") == "true":
