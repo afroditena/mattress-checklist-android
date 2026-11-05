@@ -1845,6 +1845,50 @@ def _rewrite_live_posts(access_token: str) -> list[dict]:
 # Claude API를 쓰지 않아 비용이 거의 없고, 이미 이미지가 있거나 한 번 처리한 글은 건너뛴다.
 ADD_IMAGES_STATE_FILE = PROJECT_DIR / "data" / "add_images_second_blog_state.json"
 ADD_IMAGES_GENERIC_LABELS = {"how to fix it", "2026", "ai", "tech", "news"}
+_STOCK_STOPWORDS = {
+    "why", "the", "is", "are", "a", "an", "to", "and", "for", "in", "of", "on", "at", "it", "its",
+    "wont", "go", "away", "again", "what", "do", "does", "when", "your", "you", "work", "gets", "get",
+    "with", "how", "this", "that", "will", "now", "still", "built", "trend", "talk", "most", "about",
+}
+# 라벨이 없고 제목으로도 Unsplash가 사진을 못 찾는 글(연예인·선수 이름 등)을 위한 개념 대체 검색어.
+# 제목에 아래 패턴이 맞으면 그 개념의 일반 사진을 대신 쓴다(관련성 있는 깔끔한 이미지).
+_STOCK_CONCEPTS = [
+    (re.compile(r"\b(nba|basketball|mavericks|lakers|celtics|irving|lebron|dunk)\b", re.I), "basketball court"),
+    (re.compile(r"\b(nfl|football|packers|cowboys|parsons|quarterback|touchdown|super ?bowl)\b", re.I), "american football stadium"),
+    (re.compile(r"\b(mlb|baseball|home run|pitcher)\b", re.I), "baseball stadium"),
+    (re.compile(r"\b(ad|ads|advert\w*|campaign|billboard|novig|betting|sportsbook)\b", re.I), "advertising billboard city"),
+    (re.compile(r"\b(actor|actress|dating|red carpet|celebrity|movie|film|album|singer|rapper|mgk|johnson|sweeney)\b", re.I), "red carpet event"),
+]
+
+
+def _stock_query_for(post: dict) -> str:
+    """라벨이 있으면 라벨 1~2개로, 없으면 제목에서 불용어를 뺀 핵심어 2~3개로 검색어를 만든다."""
+    labels = [l for l in (post.get("labels") or []) if l and l.lower() not in ADD_IMAGES_GENERIC_LABELS]
+    if labels:
+        return " ".join(labels[:2])
+    title = re.sub(r"[^\w\s]", " ", post.get("title", ""))
+    words = [w for w in title.split() if w.lower() not in _STOCK_STOPWORDS and len(w) > 2]
+    return " ".join(words[:3]).strip()
+
+
+def _find_stock_for_post(post: dict):
+    """글에 맞는 Unsplash 사진을 찾는다: 핵심어 -> 개념 대체 -> 마지막으로 일반 기술 사진."""
+    tried = []
+    q = _stock_query_for(post)
+    if q:
+        tried.append(q)
+        photo = find_stock_photo(q)
+        if photo:
+            return photo, q
+    title = post.get("title", "")
+    for pattern, concept in _STOCK_CONCEPTS:
+        if pattern.search(title) and concept not in tried:
+            tried.append(concept)
+            photo = find_stock_photo(concept)
+            if photo:
+                return photo, concept
+    photo = find_stock_photo("technology")
+    return (photo, "technology") if photo else (None, q or title)
 
 
 def _add_images_load_done() -> set:
@@ -1877,10 +1921,7 @@ def add_images_second_blog() -> None:
         content = post.get("content", "") or ""
         if pid in done or "<img" in content.lower():
             continue
-        labels = [l for l in (post.get("labels") or []) if l]
-        picks = [l for l in labels if l.lower() not in ADD_IMAGES_GENERIC_LABELS][:2] or labels[:2]
-        query = " ".join(picks).strip() or post.get("title", "technology")
-        photo = find_stock_photo(query)
+        photo, query = _find_stock_for_post(post)
         if not photo:
             print(f"[건너뜀] {post.get('title')}: '{query}' 스톡 사진을 찾지 못함")
             continue
