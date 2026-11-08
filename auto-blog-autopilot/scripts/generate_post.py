@@ -2118,6 +2118,8 @@ TRENDS_LOW_VALUE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 TRENDS_MIN_DISTINCT_SOURCES = 2
+# 모델 검증을 '필수 관문'으로 돌릴 때, 검색량 상위 몇 개까지 모델에게 물어볼지(2026-11-08).
+TRENDS_VERIFY_MAX = 6
 TRENDS_KR_USED_FILE = PROJECT_DIR / "data" / "used_topic_ids_trends_kr.json"
 
 # 2026-10-20: 사용자 요청("각 블로그에 구글 트렌드 중 주제에 맞는 것을 골라 발행")으로 두 블로그 모두
@@ -2252,20 +2254,28 @@ def select_trend_topic(
             offtopic.append((it["traffic"], topic_id, it))
             continue
         candidates.append((it["traffic"], topic_id, it))
-    if not candidates and offtopic and relevance_picker:
-        # 키워드로는 못 찾았지만 IT·AI와 실제로 연결되는 항목(예: 소프트웨어 회사 이름)이 있을 수 있어
-        # 검색량 상위 몇 개만 모델에게 보여 주고 고르게 한다. 연결되는 게 없으면 None.
-        top = sorted(offtopic, key=lambda c: -c[0])[:6]
-        idx = relevance_picker([c[2] for c in top])
-        if idx is not None and 0 <= idx < len(top):
-            candidates.append(top[idx])
-        else:
-            print("모델 판정: 블로그 주제 범위와 연결되는 항목이 없어 건너뜁니다: " + ", ".join(c[2]["title"] for c in top))
-    elif offtopic and not candidates:
-        print("블로그 주제 범위(경제·비즈니스/과학/소비자/정책/테크)와 무관해 건너뜀: " + ", ".join(c[2]["title"] for c in offtopic))
-    if not candidates:
-        return None
-    _, topic_id, it = max(candidates, key=lambda c: c[0])
+    if relevance_picker is None:
+        # 모델 검증 없이 쓰는 단위 테스트/오프라인 경로: 키워드가 맞는 것 중 검색량 최대.
+        if not candidates:
+            return None
+        _, topic_id, it = max(candidates, key=lambda c: c[0])
+    else:
+        # 2026-11-08: 모델 검증을 "필수 관문"으로 둔다. 헤드라인에 테크/기업 단어(netflix, deal, ad 등)가
+        # 섞여 keyword_fit=True가 된 연예·스포츠 주제(예: 넷플릭스 특집 때문에 통과한 코미디언 "john
+        # mulaney")가 확인 없이 발행되던 문제를 막기 위해, 키워드가 맞아도 모델이 "정말 경제·과학·
+        # 테크·소비자·정책 주제인가"를 확인하게 한다. 키워드 후보를 먼저(검색량 순), 그다음 비키워드
+        # 후보를 검색량 순으로 세워, 모델이 승인하는 첫 항목을 고른다(최대 TRENDS_VERIFY_MAX개까지).
+        ranked = sorted(candidates, key=lambda c: -c[0]) + sorted(offtopic, key=lambda c: -c[0])
+        chosen = None
+        for cand in ranked[:TRENDS_VERIFY_MAX]:
+            if relevance_picker([cand[2]]) == 0:
+                chosen = cand
+                break
+            print(f"모델 판정으로 제외(블로그 주제 범위 아님): {cand[2]['title']}")
+        if chosen is None:
+            print("모델 판정: 블로그 주제 범위(경제·비즈니스/과학/소비자/정책/테크)에 맞는 항목이 없어 이번 회차는 건너뜁니다.")
+            return None
+        _, topic_id, it = chosen
     return {
         "id": topic_id,
         "cluster_name": f"Trending Now (Google Trends {geo})",
@@ -2334,8 +2344,8 @@ def check_trend_post(body: str, lang: str = "en") -> str | None:
         if chars < TRENDS_MIN_CHARS_KO:
             return f"본문이 너무 짧음({chars}자 < {TRENDS_MIN_CHARS_KO})"
         headings = re.findall(r"^##\s+(.+?)\s*$", body, re.MULTILINE)
-        if not headings or headings[-1].strip() != "내 생각":
-            return "마지막 섹션이 '내 생각'이 아님"
+        if not headings or headings[-1].strip() != "정리":
+            return "마지막 섹션이 '정리'가 아님"
         if "출처" not in [h.strip() for h in headings]:
             return "출처 섹션이 없음"
         if len(set(re.findall(r"https?://([^/\s)]+)", body))) < 2:
@@ -2360,7 +2370,7 @@ def check_trend_post(body: str, lang: str = "en") -> str | None:
 
 def build_trend_take_prompt_ko(topic: dict, recent_titles: list[str]) -> str:
     """Trend Take 한국어판(new-maind, 구글 트렌드 KR): 막 뜬 IT·AI 관련 검색어를 확인된 사실 위주로
-    정리하고, 마지막 섹션을 글쓴이의 생각("내 생각")으로 끝낸다."""
+    정리하고, 마지막 섹션("정리")에서 확인된 것/확인 안 된 것을 짚은 뒤 글쓴이의 판단으로 끝낸다."""
     trend = topic["trend"]
     news_lines = "\n".join(
         f"- [{n.get('source', '?')}] {n.get('title', '')} ({n.get('url', '')})" + (f"\n  요약: {n['snippet']}" if n.get("snippet") else "")
@@ -2390,17 +2400,17 @@ def build_trend_take_prompt_ko(topic: dict, recent_titles: list[str]) -> str:
 2. ## 무슨 일이 있었나 - 확인된 사실만, 사실마다 출처("○○에 따르면")를 밝혀 짧은 문단이나 짧은 목록으로.
 3. ## 왜 지금 검색하나 - 검색이 급증한 이유와 누가 찾는지.
 4. ## 기사들이 놓친 배경 - 독자가 이해하는 데 도움이 되는 배경, 타임라인, 비교(글쓴이의 독자적인 분석, 최소 400자).
-5. ## 확인된 것과 확인되지 않은 것 - 사실, 아직 열린 질문, 소문, 진행 중인 부분을 나눠서.
-6. ## 출처 - 실제로 쓴 링크 목록(서로 다른 언론·출처 2곳 이상).
-7. ## 내 생각 - 글의 맨 마지막 섹션. 글쓴이의 관점을 짧은 문단 3~5개로.
+5. ## 출처 - 실제로 쓴 링크 목록(서로 다른 언론·출처 2곳 이상).
+6. ## 정리 - 글의 맨 마지막 섹션. 먼저 확인된 사실과 아직 확인되지 않은 부분(열린 질문·소문·진행 중인 것)을 한두 문단으로 자연스럽게 짚고, 이어서 글쓴이의 판단으로 끝낸다. 전체 3~5개 문단.
 
-## "내 생각" 쓰는 법
+## "정리" 쓰는 법
 
-- 의견이라는 점을 분명히 하고(예: "나는 ~라고 본다"), 의견마다 이유를 댄다.
+- 먼저 무엇이 확인됐고 무엇이 아직 확인되지 않았는지(열린 질문·소문·진행 중)를 짧게 짚는다. 별도 소제목 없이 문단으로 자연스럽게.
+- 그다음 글쓴이의 판단을 쓴다. 의견이라는 점을 분명히 하고(예: "나는 ~라고 본다"), 의견마다 이유를 댄다.
 - "장단점이 있다" 같은 모호한 결말 대신, 이 일이 무엇을 뜻하는지 또는 독자가 무엇을 지켜보거나 해야 하는지 구체적으로 판단한다.
 - 반대편의 타당한 점을 하나는 인정한다.
 - 누군가의 사생활, 건강, 동기, 유죄 여부, 법적 책임을 추측하지 않는다. 법률·의료·금융 쪽은 전문가가 아니라고 밝힌다.
-- 판단 그 자체로 끝낸다. 인사말, 행동 촉구, 앞 내용 요약은 쓰지 않는다.
+- 판단 그 자체로 끝낸다. 인사말, 행동 촉구, 앞 내용의 단순 요약은 쓰지 않는다.
 
 ## 정직성 규칙
 
