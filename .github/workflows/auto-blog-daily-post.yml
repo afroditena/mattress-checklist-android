@@ -8,7 +8,7 @@ on:
   # 검색량 1,000+ 항목 중 하나를 골라 Simple Tech Fix에 하루 한 편만 올린다.
   # 한국시간 오전 9시 5분(UTC 00:05)에 한 번 돈다.
   schedule:
-    - cron: "5 0 * * *" # UTC 00:05 = KST 오전 9시 5분 - trends(구글 트렌드 US -> Simple Tech Fix), 하루 1회
+    - cron: "5 0 * * *" # UTC 00:05 = KST 오전 9시 5분 - tech_fix(AI·테크 상시 글 -> Simple Tech Fix), 하루 1회 (2026-11-08 트렌드에서 복귀)
     - cron: "10 0 * * *" # UTC 00:10 = KST 오전 9시 10분 - trends_kr(구글 트렌드 KR -> new-maind, 한국어), 하루 1회
   # 아래는 2026-10-07부터 계속 꺼 둔 이전 갈래들이다. 다시 켜려면 맨 앞 "# "를 지우고
   # 위 schedule 목록에 옮겨 적으면 된다(RUN_ARMS 계산식이 이 cron 문자열로 갈래를 정한다).
@@ -34,6 +34,17 @@ on:
           블로그에 대해 함. 평소엔 항상 false로 두면 됨.
         required: false
         default: "false"
+      draft_second_blog:
+        description: >-
+          true면 Simple Tech Fix의 공개 글 중 제목에 DRAFT_TITLE_MATCH(기본: 스포츠·연예 7개
+          이름)가 들어가는 글을 비공개(초안)로 내림(draft_second_blog() 참고, 글 삭제 아님,
+          Claude API 미사용). 평소엔 false.
+        required: false
+        default: "false"
+      draft_title_match:
+        description: "draft_second_blog 대상 제목 부분일치 목록(쉼표 구분). 비우면 기본 7개 이름."
+        required: false
+        default: ""
       add_images_second_blog:
         description: >-
           true면 Simple Tech Fix의 공개 글 중 이미지가 하나도 없는 글에 주제에 맞는
@@ -121,6 +132,8 @@ jobs:
           RUN_FIX_KNOWN_POST_TITLE: ${{ github.event.inputs.fix_known_post_title || 'false' }}
           RUN_BLOG_AUDIT: ${{ github.event.inputs.blog_audit || 'false' }}
           RUN_TRENDS_PROBE: ${{ github.event.inputs.trends_probe || 'false' }}
+          RUN_DRAFT_SECOND_BLOG: ${{ github.event.inputs.draft_second_blog || 'false' }}
+          DRAFT_TITLE_MATCH: ${{ github.event.inputs.draft_title_match || '' }}
           RUN_ADD_IMAGES_SECOND_BLOG: ${{ github.event.inputs.add_images_second_blog || 'false' }}
           ADD_IMAGES_LIMIT: ${{ github.event.inputs.add_images_limit || '10' }}
           RUN_REWRITE_SECOND_BLOG: ${{ github.event.inputs.rewrite_second_blog || '' }}
@@ -136,7 +149,7 @@ jobs:
             ${{
               github.event.schedule == '0 22 * * *' && 'general'
               || (github.event.schedule == '0 0 * * *' || github.event.schedule == '0 3 * * *' || github.event.schedule == '0 8 * * *') && 'tech_fix'
-              || (github.event.schedule == '5 0 * * *' || github.event.schedule == '5 9 * * *') && 'trends'
+              || (github.event.schedule == '5 0 * * *' || github.event.schedule == '5 9 * * *') && 'tech_fix'
               || github.event.schedule == '10 0 * * *' && 'trends_kr'
               || github.event.inputs.run_arms
               || ''
@@ -172,6 +185,7 @@ jobs:
                    auto-blog-autopilot/data/backups_second_blog auto-blog-autopilot/data/rewrite_drafts_second_blog \
                    auto-blog-autopilot/data/rewrite_second_blog_state.json \
                    auto-blog-autopilot/data/add_images_second_blog_state.json \
+                   auto-blog-autopilot/data/draft_second_blog_state.json \
                    auto-blog-autopilot/data/manual_topic.json auto-blog-autopilot/data/manual_topic_queue.json; do
             if [ -e "$f" ] || git cat-file -e "HEAD:$f" 2>/dev/null; then
               git add "$f"

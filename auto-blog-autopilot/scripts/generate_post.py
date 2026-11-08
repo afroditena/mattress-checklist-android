@@ -1943,6 +1943,57 @@ def add_images_second_blog() -> None:
     print(f"이번 실행에서 이미지를 넣은 공개 글: {len(changed)}개")
 
 
+# 2026-11-08 일회성: 사용자 결정으로, Simple Tech Fix에 잘못 올라간 스포츠·연예 트렌드 글을
+# 공개에서 내려 초안으로 되돌린다(애드센스 "가치가 별로 없는 콘텐츠"의 핵심). 글을 삭제하지 않고
+# Blogger revert로 비공개(DRAFT) 처리만 한다. 제목에 아래 이름 중 하나가 들어가면 대상으로 본다.
+DRAFT_STATE_FILE = PROJECT_DIR / "data" / "draft_second_blog_state.json"
+DRAFT_DEFAULT_MATCH = "Kyrie Irving,Micah Parsons,Dakota Johnson,Sydney Sweeney,Draymond Green,Luka Doncic,John Mulaney"
+
+
+def _blogger_revert_to_draft(post_id: str, access_token: str) -> dict:
+    req = urllib.request.Request(
+        f"https://www.googleapis.com/blogger/v3/blogs/{TRENDS_BLOG_ID}/posts/{post_id}/revert",
+        data=b"",
+        method="POST",
+        headers={"Authorization": f"Bearer {access_token}", "Content-Length": "0"},
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return json.loads(resp.read())
+
+
+def draft_second_blog() -> None:
+    """RUN_DRAFT_SECOND_BLOG=true: Simple Tech Fix(TRENDS_BLOG_ID)의 공개 글 중 제목에 DRAFT_TITLE_MATCH
+    (쉼표 구분, 기본은 스포츠·연예 7개 이름)가 들어가는 글을 Blogger revert로 비공개(초안) 처리한다.
+    글은 삭제하지 않는다. Claude API 미사용."""
+    if not blogger_configured():
+        print("Blogger 인증 정보가 없어 건너뜁니다.")
+        return
+    matches = [m.strip().lower() for m in (os.environ.get("DRAFT_TITLE_MATCH") or DRAFT_DEFAULT_MATCH).split(",") if m.strip()]
+    access_token = get_google_access_token()
+    posts = _rewrite_live_posts(access_token)
+    done = []
+    try:
+        already = set(json.loads(DRAFT_STATE_FILE.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        already = set()
+    for post in posts:
+        title = (post.get("title") or "")
+        if not any(m in title.lower() for m in matches):
+            continue
+        pid = post["id"]
+        try:
+            _blogger_revert_to_draft(pid, access_token)
+        except (urllib.error.URLError, urllib.error.HTTPError) as e:
+            print(f"[건너뜀] {title}: 초안 전환 실패: {e}")
+            continue
+        already.add(pid)
+        done.append(title)
+        print(f"[초안 전환] {title} ({post.get('url')})")
+    DRAFT_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DRAFT_STATE_FILE.write_text(json.dumps(sorted(already), ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"이번 실행에서 초안으로 내린 글: {len(done)}개")
+
+
 def rewrite_second_blog(mode: str) -> None:
     """RUN_REWRITE_SECOND_BLOG=dry|apply. 위 주석 참고."""
     if not blogger_configured():
@@ -2709,6 +2760,11 @@ def main() -> None:
     if os.environ.get("RUN_ADD_IMAGES_SECOND_BLOG") == "true":
         # 일회성: 이미지 없는 공개 글에 스톡 사진을 넣는다. Claude API 미사용이라 키 검사보다 먼저 처리.
         add_images_second_blog()
+        return
+
+    if os.environ.get("RUN_DRAFT_SECOND_BLOG") == "true":
+        # 일회성: 스포츠·연예 글을 비공개(초안)로 내린다. Claude API 미사용.
+        draft_second_blog()
         return
 
     if os.environ.get("RUN_TRENDS_PROBE") == "true":
